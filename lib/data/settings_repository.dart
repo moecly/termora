@@ -1,8 +1,17 @@
 import 'package:flutter/foundation.dart';
 
 import 'json_store.dart';
+import 'key_mapping.dart';
 
 const int kSettingsSchemaVersion = 1;
+
+/// Terminal font size bounds (pt), shared by the settings slider and pinch zoom.
+const double kTerminalFontSizeMin = 8;
+const double kTerminalFontSizeMax = 28;
+
+const List<KeyMapping> kDefaultKeyMappings = [
+  KeyMapping(source: 'volumeDown', action: 'ctrl'),
+];
 
 enum ThemeSetting { system, light, dark }
 
@@ -17,11 +26,13 @@ class AppSettings {
     this.keepAliveSeconds = 30,
     this.connectTimeoutSeconds = 15,
     this.rememberPasswordsByDefault = false,
+    this.keepScreenOn = true,
+    this.keyMappings = kDefaultKeyMappings,
   });
 
   final ThemeSetting theme;
 
-  /// 10..22, default 13.
+  /// 8..28, default 13.
   final double terminalFontSize;
   final String terminalThemeId;
 
@@ -35,6 +46,12 @@ class AppSettings {
   final int connectTimeoutSeconds;
   final bool rememberPasswordsByDefault;
 
+  /// Keeps the screen awake while a terminal session is open.
+  final bool keepScreenOn;
+
+  /// Android hardware-key → terminal-action mappings.
+  final List<KeyMapping> keyMappings;
+
   AppSettings copyWith({
     ThemeSetting? theme,
     double? terminalFontSize,
@@ -43,6 +60,8 @@ class AppSettings {
     int? keepAliveSeconds,
     int? connectTimeoutSeconds,
     bool? rememberPasswordsByDefault,
+    bool? keepScreenOn,
+    List<KeyMapping>? keyMappings,
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
@@ -53,6 +72,8 @@ class AppSettings {
       connectTimeoutSeconds: connectTimeoutSeconds ?? this.connectTimeoutSeconds,
       rememberPasswordsByDefault:
           rememberPasswordsByDefault ?? this.rememberPasswordsByDefault,
+      keepScreenOn: keepScreenOn ?? this.keepScreenOn,
+      keyMappings: keyMappings ?? this.keyMappings,
     );
   }
 
@@ -64,6 +85,8 @@ class AppSettings {
         'keepAliveSeconds': keepAliveSeconds,
         'connectTimeoutSeconds': connectTimeoutSeconds,
         'rememberPasswordsByDefault': rememberPasswordsByDefault,
+        'keepScreenOn': keepScreenOn,
+        'keyMappings': keyMappings.map((m) => m.toJson()).toList(),
       };
 
   factory AppSettings.fromJson(Map<String, Object?> json) {
@@ -84,7 +107,23 @@ class AppSettings {
           (json['connectTimeoutSeconds'] as num?)?.toInt() ?? defaults.connectTimeoutSeconds,
       rememberPasswordsByDefault:
           json['rememberPasswordsByDefault'] as bool? ?? defaults.rememberPasswordsByDefault,
+      keepScreenOn: json['keepScreenOn'] as bool? ?? defaults.keepScreenOn,
+      keyMappings: _parseKeyMappings(json['keyMappings']) ?? defaults.keyMappings,
     );
+  }
+
+  static List<KeyMapping>? _parseKeyMappings(Object? raw) {
+    if (raw is! List) return null;
+    final parsed = <KeyMapping>[];
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final map = entry.cast<String, Object?>();
+      final source = map['source'];
+      final action = map['action'];
+      if (source is! String || action is! String) continue;
+      parsed.add(KeyMapping(source: source, action: action));
+    }
+    return parsed.isEmpty ? null : parsed;
   }
 
   @override
@@ -96,12 +135,22 @@ class AppSettings {
       other.scrollbackLines == scrollbackLines &&
       other.keepAliveSeconds == keepAliveSeconds &&
       other.connectTimeoutSeconds == connectTimeoutSeconds &&
-      other.rememberPasswordsByDefault == rememberPasswordsByDefault;
+      other.rememberPasswordsByDefault == rememberPasswordsByDefault &&
+      other.keepScreenOn == keepScreenOn &&
+      listEquals(other.keyMappings, keyMappings);
 
   @override
-  int get hashCode => Object.hash(theme, terminalFontSize, terminalThemeId,
-      scrollbackLines, keepAliveSeconds, connectTimeoutSeconds,
-      rememberPasswordsByDefault);
+  int get hashCode => Object.hash(
+        theme,
+        terminalFontSize,
+        terminalThemeId,
+        scrollbackLines,
+        keepAliveSeconds,
+        connectTimeoutSeconds,
+        rememberPasswordsByDefault,
+        keepScreenOn,
+        Object.hashAll(keyMappings),
+      );
 }
 
 class SettingsRepository extends ChangeNotifier {

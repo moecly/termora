@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/app.dart';
 import '../../data/models.dart';
@@ -6,6 +7,7 @@ import '../../data/settings_repository.dart';
 import '../../design/tokens.dart';
 import '../../session/session_status.dart';
 import '../../session/terminal_session.dart';
+import '../../terminal/terminal_style.dart';
 import '../../terminal/terminal_themes.dart';
 import '../servers/server_edit_page.dart';
 import 'helper_key_bar.dart';
@@ -35,22 +37,21 @@ class TerminalPage extends StatelessWidget {
   }
 }
 
-class _TerminalScaffold extends StatelessWidget {
+class _TerminalScaffold extends StatefulWidget {
   const _TerminalScaffold({required this.session, required this.settings});
 
   final TerminalSession session;
   final AppSettings settings;
 
-  Color _statusColor(BuildContext context, SessionStatus status) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return switch (status) {
-      SessionStatus.connecting => AppColors.warning,
-      SessionStatus.connected => AppColors.success,
-      SessionStatus.disconnected =>
-        dark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-      SessionStatus.failed => AppColors.danger,
-    };
-  }
+  @override
+  State<_TerminalScaffold> createState() => _TerminalScaffoldState();
+}
+
+class _TerminalScaffoldState extends State<_TerminalScaffold> {
+  bool _fullscreen = false;
+
+  TerminalSession get session => widget.session;
+  AppSettings get settings => widget.settings;
 
   String _statusText() {
     return switch (session.status) {
@@ -177,7 +178,8 @@ class _TerminalScaffold extends StatelessWidget {
 
   void _changeFontSize(BuildContext context, double delta) {
     final scope = ServicesScope.of(context);
-    final next = (settings.terminalFontSize + delta).clamp(10.0, 22.0);
+    final next = (settings.terminalFontSize + delta)
+        .clamp(kTerminalFontSizeMin, kTerminalFontSizeMax);
     scope.settings.update(settings.copyWith(terminalFontSize: next));
   }
 
@@ -186,97 +188,145 @@ class _TerminalScaffold extends StatelessWidget {
     final scope = ServicesScope.of(context);
     final manager = scope.manager;
     final theme = kTerminalThemes[settings.terminalThemeId]!;
+    final lightBackground = theme.background.computeLuminance() > 0.5;
 
-    return Scaffold(
+    final appBar = AppBar(
       backgroundColor: theme.background,
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              session.server.name,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+      foregroundColor: theme.foreground,
+      systemOverlayStyle:
+          lightBackground ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            session.server.name,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: theme.foreground,
             ),
-            Text(
-              _statusText(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: _statusColor(context, session.status),
-              ),
+          ),
+          Text(
+            _statusText(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w400,
+              color: terminalStatusColor(session.status, theme),
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.keyboard_outlined),
-            onPressed: _toggleKeyboard,
-          ),
-          IconButton(
-            icon: const Icon(Icons.layers_outlined),
-            onPressed: () => _showSessionSwitcher(context),
-          ),
-          PopupMenuButton<String>(
-            onSelected: (value) async {
-              switch (value) {
-                case 'reconnect':
-                  final size = session.terminal.viewWidth;
-                  await session.reconnect(
-                    width: size > 0 ? size : 80,
-                    height: session.terminal.viewHeight > 0
-                        ? session.terminal.viewHeight
-                        : 24,
-                  );
-                case 'disconnect':
-                  await session.disconnect();
-                case 'close':
-                  await manager.closeSession(session.id);
-                  if (context.mounted) Navigator.of(context).pop();
-                case 'fontUp':
-                  _changeFontSize(context, 1);
-                case 'fontDown':
-                  _changeFontSize(context, -1);
-                case 'theme':
-                  await _showThemePicker(context);
-                case 'edit':
-                  await Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => ServerEditPage(server: session.server),
-                    ),
-                  );
-                case 'info':
-                  await _showServerInfo(context);
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'reconnect', child: Text('重新连接')),
-              PopupMenuItem(value: 'disconnect', child: Text('断开连接')),
-              PopupMenuItem(value: 'close', child: Text('关闭会话')),
-              PopupMenuItem(value: 'fontUp', child: Text('增大字号')),
-              PopupMenuItem(value: 'fontDown', child: Text('减小字号')),
-              PopupMenuItem(value: 'theme', child: Text('终端配色')),
-              PopupMenuItem(value: 'edit', child: Text('编辑服务器')),
-              PopupMenuItem(value: 'info', child: Text('服务器信息')),
-            ],
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: TerminalViewport(session: session, settings: settings),
-          ),
-          _SelectionBar(session: session),
-          HelperKeyBar(session: session),
-        ],
+      actions: [
+        IconButton(
+          icon: Icon(_fullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
+          tooltip: _fullscreen ? '退出全屏' : '全屏',
+          onPressed: () => setState(() => _fullscreen = !_fullscreen),
+        ),
+        IconButton(
+          icon: const Icon(Icons.keyboard_outlined),
+          onPressed: _toggleKeyboard,
+        ),
+        IconButton(
+          icon: const Icon(Icons.layers_outlined),
+          onPressed: () => _showSessionSwitcher(context),
+        ),
+        PopupMenuButton<String>(
+          onSelected: (value) async {
+            switch (value) {
+              case 'reconnect':
+                final size = session.terminal.viewWidth;
+                await session.reconnect(
+                  width: size > 0 ? size : 80,
+                  height: session.terminal.viewHeight > 0
+                      ? session.terminal.viewHeight
+                      : 24,
+                );
+              case 'disconnect':
+                await session.disconnect();
+              case 'close':
+                await manager.closeSession(session.id);
+                if (context.mounted) Navigator.of(context).pop();
+              case 'fontUp':
+                _changeFontSize(context, 1);
+              case 'fontDown':
+                _changeFontSize(context, -1);
+              case 'theme':
+                await _showThemePicker(context);
+              case 'edit':
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ServerEditPage(server: session.server),
+                  ),
+                );
+              case 'info':
+                await _showServerInfo(context);
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'reconnect', child: Text('重新连接')),
+            PopupMenuItem(value: 'disconnect', child: Text('断开连接')),
+            PopupMenuItem(value: 'close', child: Text('关闭会话')),
+            PopupMenuItem(value: 'fontUp', child: Text('增大字号')),
+            PopupMenuItem(value: 'fontDown', child: Text('减小字号')),
+            PopupMenuItem(value: 'theme', child: Text('终端配色')),
+            PopupMenuItem(value: 'edit', child: Text('编辑服务器')),
+            PopupMenuItem(value: 'info', child: Text('服务器信息')),
+          ],
+        ),
+      ],
+    );
+
+    final body = Column(
+      children: [
+        Expanded(
+          child: TerminalViewport(session: session, settings: settings),
+        ),
+        _SelectionBar(session: session),
+        HelperKeyBar(session: session),
+      ],
+    );
+
+    return PopScope(
+      canPop: !_fullscreen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _fullscreen = false);
+      },
+      child: Scaffold(
+        backgroundColor: theme.background,
+        resizeToAvoidBottomInset: true,
+        appBar: _fullscreen ? null : appBar,
+        body: _fullscreen
+            ? Stack(
+                children: [
+                  body,
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(Space.x2),
+                        child: Material(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          shape: const CircleBorder(),
+                          child: IconButton(
+                            icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
+                            tooltip: '退出全屏',
+                            onPressed: () => setState(() => _fullscreen = false),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : body,
       ),
     );
   }
@@ -314,6 +364,12 @@ class _SelectionBar extends StatelessWidget {
                           session.terminalController.clearSelection();
                         },
                         child: const Text('复制'),
+                      ),
+                      TextButton(
+                        onPressed: () => _invoke(
+                          const PasteTextIntent(SelectionChangedCause.toolbar),
+                        ),
+                        child: const Text('粘贴'),
                       ),
                       TextButton(
                         onPressed: () => _invoke(

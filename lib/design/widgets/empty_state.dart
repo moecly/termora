@@ -2,21 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../tokens.dart';
 
-/// A centered empty-state placeholder with an icon, title, optional subtitle
-/// and optional action button.
+/// A centered empty-state placeholder with an icon, title and optional subtitle.
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,
     required this.icon,
     required this.title,
     this.subtitle,
-    this.action,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
-  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -42,10 +39,6 @@ class EmptyState extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-            ],
-            if (action != null) ...[
-              const SizedBox(height: Space.x5),
-              action!,
             ],
           ],
         ),

@@ -104,4 +104,21 @@ void main() {
     expect(modifiers.alt, isFalse);
     expect(modifiers.shift, isFalse);
   });
+
+  test('hardware hold sets the modifier on and release clears it', () {
+    modifiers.setHeld(TerminalModifier.ctrl, true);
+    expect(modifiers.ctrl, isTrue);
+    modifiers.setHeld(TerminalModifier.ctrl, false);
+    expect(modifiers.ctrl, isFalse);
+  });
+
+  test('a hardware-held modifier survives a consumed key', () {
+    modifiers.setHeld(TerminalModifier.ctrl, true);
+    handler(_event(TerminalKey.keyC));
+    // Not reset: the key is still physically held.
+    expect(modifiers.ctrl, isTrue);
+    // Releasing it clears the state.
+    modifiers.setHeld(TerminalModifier.ctrl, false);
+    expect(modifiers.ctrl, isFalse);
+  });
 }

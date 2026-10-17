@@ -124,54 +124,16 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
                 if (servers.isEmpty)
-                  SliverFillRemaining(
+                  const SliverFillRemaining(
                     hasScrollBody: false,
                     child: EmptyState(
                       icon: Icons.dns_outlined,
                       title: '还没有服务器',
                       subtitle: '添加一台服务器即可开始连接',
-                      action: FilledButton.icon(
-                        onPressed: () => _newServer(context),
-                        icon: const Icon(Icons.add),
-                        label: const Text('新增服务器'),
-                      ),
                     ),
                   )
                 else ...[
-                  if (scope.servers.favorites.isNotEmpty) ...[
-                    const SliverToBoxAdapter(child: SectionHeader(title: '收藏')),
-                    SliverList.builder(
-                      itemCount: scope.servers.favorites.length,
-                      itemBuilder: (context, i) =>
-                          ServerTile(server: scope.servers.favorites[i]),
-                    ),
-                  ],
-                  if (scope.servers.recents.isNotEmpty) ...[
-                    const SliverToBoxAdapter(child: SectionHeader(title: '最近连接')),
-                    SliverList.builder(
-                      itemCount: scope.servers.recents.length,
-                      itemBuilder: (context, i) =>
-                          ServerTile(server: scope.servers.recents[i]),
-                    ),
-                  ],
-                  for (final group in scope.servers.groups)
-                    if (scope.servers.byGroup(group.id).isNotEmpty) ...[
-                      SliverToBoxAdapter(child: SectionHeader(title: group.name)),
-                      SliverList.builder(
-                        itemCount: scope.servers.byGroup(group.id).length,
-                        itemBuilder: (context, i) =>
-                            ServerTile(server: scope.servers.byGroup(group.id)[i]),
-                      ),
-                    ],
-                  if (scope.servers.byGroup(null).isNotEmpty) ...[
-                    if (scope.servers.groups.isNotEmpty)
-                      const SliverToBoxAdapter(child: SectionHeader(title: '未分组')),
-                    SliverList.builder(
-                      itemCount: scope.servers.byGroup(null).length,
-                      itemBuilder: (context, i) =>
-                          ServerTile(server: scope.servers.byGroup(null)[i]),
-                    ),
-                  ],
+                  ..._serverSections(context, scope),
                 ],
                 const SliverToBoxAdapter(child: SizedBox(height: 88)),
               ],
@@ -180,6 +142,55 @@ class _HomePageState extends State<HomePage> {
         );
       },
     );
+  }
+
+  /// Builds the favorites / recents / grouped / ungrouped slivers, ensuring each
+  /// server is shown at most once: favorites win over recents, both win over
+  /// groups and the ungrouped bucket.
+  List<Widget> _serverSections(BuildContext context, ServicesScope scope) {
+    final favorites = scope.servers.favorites;
+    final favIds = {for (final s in favorites) s.id};
+    final recents = [
+      for (final s in scope.servers.recents)
+        if (!favIds.contains(s.id)) s,
+    ];
+    final shownIds = {...favIds, for (final s in recents) s.id};
+
+    List<Widget> section(String title, List<ServerConfig> servers) => [
+          SliverToBoxAdapter(child: SectionHeader(title: title)),
+          SliverList.builder(
+            itemCount: servers.length,
+            itemBuilder: (context, i) => ServerTile(server: servers[i]),
+          ),
+        ];
+
+    return [
+      if (favorites.isNotEmpty) ...section('收藏', favorites),
+      if (recents.isNotEmpty) ...section('最近连接', recents),
+      for (final group in scope.servers.groups)
+        if (scope.servers
+            .byGroup(group.id)
+            .where((s) => !shownIds.contains(s.id))
+            .isNotEmpty)
+          ...section(
+            group.name,
+            scope.servers.byGroup(group.id).where((s) => !shownIds.contains(s.id)).toList(),
+          ),
+      if (scope.servers.byGroup(null).where((s) => !shownIds.contains(s.id)).isNotEmpty) ...[
+        if (scope.servers.groups.isNotEmpty)
+          const SliverToBoxAdapter(child: SectionHeader(title: '未分组')),
+        SliverList.builder(
+          itemCount:
+              scope.servers.byGroup(null).where((s) => !shownIds.contains(s.id)).length,
+          itemBuilder: (context, i) => ServerTile(
+            server: scope.servers
+                .byGroup(null)
+                .where((s) => !shownIds.contains(s.id))
+                .elementAt(i),
+          ),
+        ),
+      ],
+    ];
   }
 
   bool _matches(ServerConfig server, String query) {

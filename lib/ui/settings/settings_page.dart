@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:xterm2/xterm.dart';
 
 import '../../app/app.dart';
+import '../../data/key_mapping.dart';
 import '../../data/settings_repository.dart';
 import '../../design/tokens.dart';
 import '../../terminal/terminal_themes.dart';
@@ -41,9 +42,9 @@ class SettingsPage extends StatelessWidget {
               ListTile(
                 title: const Text('字号'),
                 subtitle: Slider(
-                  min: 10,
-                  max: 22,
-                  divisions: 12,
+                  min: kTerminalFontSizeMin,
+                  max: kTerminalFontSizeMax,
+                  divisions: 20,
                   value: settings.terminalFontSize,
                   label: '${settings.terminalFontSize.round()} pt',
                   onChanged: (v) =>
@@ -136,6 +137,34 @@ class SettingsPage extends StatelessWidget {
                   settings.copyWith(rememberPasswordsByDefault: v),
                 ),
               ),
+              SwitchListTile(
+                title: const Text('连接时保持屏幕常亮'),
+                value: settings.keepScreenOn,
+                onChanged: (v) => scope.settings.update(
+                  settings.copyWith(keepScreenOn: v),
+                ),
+              ),
+              _header(context, '按键映射'),
+              const ListTile(
+                title: Text('按键映射'),
+                subtitle: Text('仅 Android 生效：把音量键等映射为 Ctrl、方向键等'),
+              ),
+              for (final m in settings.keyMappings)
+                ListTile(
+                  title: Text(
+                    '${keyMappingSourceLabel(m.source)} → ${keyMappingActionLabel(m.action)}',
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    tooltip: '删除',
+                    onPressed: () => _removeMapping(context, m),
+                  ),
+                ),
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('添加映射'),
+                onTap: () => _addMapping(context),
+              ),
               _header(context, '数据'),
               ListTile(
                 leading: const Icon(Icons.upload_file_outlined),
@@ -203,6 +232,70 @@ class SettingsPage extends StatelessWidget {
           Container(width: 12, height: 12, color: color),
       ],
     );
+  }
+
+  Future<void> _removeMapping(BuildContext context, KeyMapping mapping) async {
+    final scope = ServicesScope.of(context);
+    final next = scope.settings.settings.keyMappings
+        .where((m) => m != mapping)
+        .toList();
+    await scope.settings.update(scope.settings.settings.copyWith(keyMappings: next));
+  }
+
+  Future<void> _addMapping(BuildContext context) async {
+    final scope = ServicesScope.of(context);
+    final current = scope.settings.settings.keyMappings;
+    var source = kKeyMappingSources.first.id;
+    var action = kKeyMappingActions.first.id;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('添加映射'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: source,
+                decoration: const InputDecoration(labelText: '按键'),
+                items: [
+                  for (final s in kKeyMappingSources)
+                    DropdownMenuItem(value: s.id, child: Text(s.label)),
+                ],
+                onChanged: (v) => setDialogState(() => source = v ?? source),
+              ),
+              const SizedBox(height: Space.x3),
+              DropdownButtonFormField<String>(
+                initialValue: action,
+                decoration: const InputDecoration(labelText: '动作'),
+                items: [
+                  for (final a in kKeyMappingActions)
+                    DropdownMenuItem(value: a.id, child: Text(a.label)),
+                ],
+                onChanged: (v) => setDialogState(() => action = v ?? action),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('添加'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    final next = [
+      for (final m in current)
+        if (m.source != source) m,
+      KeyMapping(source: source, action: action),
+    ];
+    await scope.settings.update(scope.settings.settings.copyWith(keyMappings: next));
   }
 
   Future<void> _clearKnownHosts(BuildContext context) async {

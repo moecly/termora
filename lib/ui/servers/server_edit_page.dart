@@ -52,9 +52,20 @@ class _ServerEditPageState extends State<ServerEditPage> {
     _note = TextEditingController(text: s?.note ?? '');
     _method = s?.authMethod ?? AuthMethod.password;
     _favorite = s?.favorite ?? false;
-    _rememberPassword = s?.rememberPassword ?? false;
-    _rememberPassphrase = s?.rememberPassphrase ?? false;
     _groupId = s?.groupId;
+  }
+
+  bool _loadedSecrets = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_loadedSecrets) return;
+    _loadedSecrets = true;
+    final s = widget.server;
+    final defaults = ServicesScope.of(context).settings.settings.rememberPasswordsByDefault;
+    _rememberPassword = s?.rememberPassword ?? defaults;
+    _rememberPassphrase = s?.rememberPassphrase ?? defaults;
     if (s != null) _loadSecrets(s.id);
   }
 

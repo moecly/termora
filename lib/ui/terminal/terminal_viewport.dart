@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:xterm2/xterm.dart';
 
 import '../../app/app.dart';
@@ -29,7 +32,75 @@ class TerminalViewport extends StatefulWidget {
 class _TerminalViewportState extends State<TerminalViewport> {
   bool _started = false;
 
+  final Map<int, Offset> _pointers = {};
+  double? _pinchStartDistance;
+  double? _pinchStartFontSize;
+
   TerminalSession get _session => widget.session;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.settings.keepScreenOn) unawaited(_setWakelock(true));
+  }
+
+  @override
+  void dispose() {
+    unawaited(_setWakelock(false));
+    super.dispose();
+  }
+
+  Future<void> _setWakelock(bool on) async {
+    try {
+      if (on) {
+        await WakelockPlus.enable();
+      } else {
+        await WakelockPlus.disable();
+      }
+    } catch (_) {
+      // Platform without wakelock support: silently degrade.
+    }
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    _pointers[event.pointer] = event.position;
+    if (_pointers.length == 2) {
+      _pinchStartDistance = _distanceBetweenPointers();
+      _pinchStartFontSize = widget.settings.terminalFontSize;
+    }
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (!_pointers.containsKey(event.pointer)) return;
+    _pointers[event.pointer] = event.position;
+
+    if (_pinchStartDistance != null && _pointers.length == 2) {
+      final next = pinchFontSize(
+        base: _pinchStartFontSize!,
+        startDistance: _pinchStartDistance!,
+        currentDistance: _distanceBetweenPointers(),
+      );
+      if (next != widget.settings.terminalFontSize) {
+        ServicesScope.of(context)
+            .settings
+            .update(widget.settings.copyWith(terminalFontSize: next));
+      }
+    }
+  }
+
+  void _onPointerUp(PointerEvent event) {
+    _pointers.remove(event.pointer);
+    if (_pointers.length < 2) {
+      _pinchStartDistance = null;
+      _pinchStartFontSize = null;
+    }
+  }
+
+  double _distanceBetweenPointers() {
+    final values = _pointers.values.toList();
+    if (values.length != 2) return 0;
+    return (values[0] - values[1]).distance;
+  }
 
   @override
   void didUpdateWidget(TerminalViewport oldWidget) {
@@ -89,8 +160,14 @@ class _TerminalViewportState extends State<TerminalViewport> {
     final theme = kTerminalThemes[widget.settings.terminalThemeId]!;
     final style = terminalStyleFor(widget.settings.terminalFontSize);
 
-    return RepaintBoundary(
-      child: LayoutBuilder(
+    return Listener(
+      onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
+      onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerUp,
+      behavior: HitTestBehavior.translucent,
+      child: RepaintBoundary(
+        child: LayoutBuilder(
         builder: (context, constraints) {
           _ensureStarted(constraints);
           return Actions(
@@ -178,6 +255,7 @@ class _TerminalViewportState extends State<TerminalViewport> {
             ),
           );
         },
+      ),
       ),
     );
   }

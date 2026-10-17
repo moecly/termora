@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/known_hosts_repository.dart';
@@ -6,6 +8,7 @@ import '../data/secret_store.dart';
 import '../data/server_repository.dart';
 import '../data/settings_repository.dart';
 import '../design/app_theme.dart';
+import '../session/hardware_key_service.dart';
 import '../session/session_manager.dart';
 import '../ssh/connection_factory.dart';
 import '../ssh/host_key_verifier.dart';
@@ -100,15 +103,22 @@ class _TermoraAppState extends State<TermoraApp> with WidgetsBindingObserver {
     connector: _connect,
   );
 
+  late final HardwareKeyService _hardwareKeys = HardwareKeyService(
+    manager: _sessionManager,
+    settings: widget.settings,
+  );
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(_hardwareKeys.init());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _hardwareKeys.dispose();
     _sessionManager.dispose();
     super.dispose();
   }

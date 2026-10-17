@@ -1,14 +1,20 @@
 import 'package:flutter/foundation.dart';
 import 'package:xterm2/xterm.dart';
 
-/// Modifier state for the on-screen helper key bar.
+/// Modifier keys that can be latched.
+enum TerminalModifier { ctrl, alt, shift }
+
+/// Modifier state for the on-screen helper key bar and hardware keys.
 ///
-/// Ctrl/Alt auto-reset after the next consumed key; Shift is sticky so the user
-/// can type several capitals/symbols in a row.
+/// A modifier latched by a one-shot toggle (on-screen bar) auto-resets after the
+/// next consumed key; a modifier held by a hardware key stays down until that
+/// key is released, mimicking a physical keyboard.
 class KeyModifiers extends ChangeNotifier {
   bool ctrl = false;
   bool alt = false;
   bool shift = false;
+
+  final Set<TerminalModifier> _held = {};
 
   void toggleCtrl() {
     ctrl = !ctrl;
@@ -25,18 +31,45 @@ class KeyModifiers extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearAll() {
-    ctrl = alt = shift = false;
+  /// Sets [key] from a hardware key-down/up event.
+  ///
+  /// Held modifiers survive [consumeAfterKey] until [held] becomes false.
+  void setHeld(TerminalModifier key, bool held) {
+    if (held) {
+      _held.add(key);
+    } else {
+      _held.remove(key);
+    }
+    switch (key) {
+      case TerminalModifier.ctrl:
+        ctrl = held;
+      case TerminalModifier.alt:
+        alt = held;
+      case TerminalModifier.shift:
+        shift = held;
+    }
     notifyListeners();
   }
 
-  /// Called after a key has been consumed: Ctrl/Alt latch for one key only.
+  void clearAll() {
+    ctrl = alt = shift = false;
+    _held.clear();
+    notifyListeners();
+  }
+
+  /// Called after a key has been consumed: one-shot Ctrl/Alt latch for one key
+  /// only; hardware-held modifiers persist until released.
   void consumeAfterKey() {
-    if (ctrl || alt) {
+    var changed = false;
+    if (ctrl && !_held.contains(TerminalModifier.ctrl)) {
       ctrl = false;
-      alt = false;
-      notifyListeners();
+      changed = true;
     }
+    if (alt && !_held.contains(TerminalModifier.alt)) {
+      alt = false;
+      changed = true;
+    }
+    if (changed) notifyListeners();
   }
 }
 

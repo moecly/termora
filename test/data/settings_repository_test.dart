@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:termora/data/json_store.dart';
+import 'package:termora/data/key_mapping.dart';
 import 'package:termora/data/settings_repository.dart';
 
 void main() {
@@ -30,6 +31,35 @@ void main() {
     expect(repo.settings.terminalThemeId, 'termoraDark');
     expect(repo.settings.scrollbackLines, 5000);
     expect(repo.settings.rememberPasswordsByDefault, isFalse);
+    expect(repo.settings.keepScreenOn, isTrue);
+    expect(
+      repo.settings.keyMappings,
+      const [KeyMapping(source: 'volumeDown', action: 'ctrl')],
+    );
+  });
+
+  test('custom key mappings persist and reload identically', () async {
+    const next = AppSettings(
+      keyMappings: [KeyMapping(source: 'volumeUp', action: 'escape')],
+    );
+    await repo.update(next);
+
+    final reloaded = SettingsRepository(JsonStore(file));
+    await reloaded.load();
+    expect(reloaded.settings.keyMappings, next.keyMappings);
+    expect(reloaded.settings.keepScreenOn, isTrue);
+  });
+
+  test('malformed key mappings fall back to defaults', () async {
+    await file.writeAsString(jsonEncode({
+      'schemaVersion': 1,
+      'keyMappings': [
+        {'source': 'bogus'},
+        'not-a-map',
+      ],
+    }));
+    await repo.load();
+    expect(repo.settings.keyMappings, kDefaultKeyMappings);
   });
 
   test('update persists and reloads identically', () async {
