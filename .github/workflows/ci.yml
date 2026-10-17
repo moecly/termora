@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NIX_CONFIG: |
+    experimental-features = nix-command flakes
+    warn-dirty = false
+
+jobs:
+  test:
+    name: Analyze and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      # The devshell pulls a full Flutter SDK, JDK, Android SDK/NDK and the GTK
+      # stack out of the Nix store; reclaim the runner's preinstalled Android SDK
+      # (a few GB) so it fits.
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc "$AGENT_TOOLSDIRECTORY"
+
+      - uses: cachix/install-nix-action@v31.11.2
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 5G
+
+      - name: Analyze
+        run: nix develop -c flutter analyze --fatal-infos
+
+      - name: Unit and widget tests
+        run: nix develop -c flutter test --exclude-tags integration
+
+      # tool/local-sshd.sh serves exactly one connection, so it is started and
+      # torn down around this single run.
+      - name: Integration test against a real sshd
+        run: |
+          nix develop -c bash -c '
+            set -euo pipefail
+            tool/local-sshd.sh up
+            trap "tool/local-sshd.sh down" EXIT
+            flutter test --tags integration
+          '
+
+  build:
+    name: Build artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc "$AGENT_TOOLSDIRECTORY"
+
+      - uses: cachix/install-nix-action@v31.11.2
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 5G
+
+      - name: Build Linux desktop bundle
+        run: nix develop -c flutter build linux --release
+
+      - name: Upload Linux bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: termora-linux-x64
+          path: build/linux/x64/release/bundle/
+          if-no-files-found: error
+
+      # Signed with the template's debug keystore, as `flutter create` sets up:
+      # this artifact is for testing, not for distribution.
+      - name: Build Android release APK
+        run: nix develop -c flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: termora-android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error

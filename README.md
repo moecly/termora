@@ -59,6 +59,17 @@ just sshd-down
 
 没有启动 sshd 时集成测试会自动跳过（不会让 `just test` 变红）。
 
+## 持续集成
+
+`.github/workflows/ci.yml`，在推送到 `main`、PR 以及手动触发时运行：
+
+| Job | 内容 |
+|---|---|
+| `test` | `flutter analyze --fatal-infos`、单元/Widget 测试、真实 sshd 集成测试 |
+| `build` | Linux release 包与 Android release APK，作为 artifact 上传 |
+
+Runner 上的步骤就是本仓库的 `just` 任务（`analyze` / `test` / `test-integration` / `build-linux` / `build-apk`），因此本地跑通即等同于 CI 跑通。APK 使用 `flutter create` 模板自带的 debug keystore 签名，仅供测试，不可用于分发。
+
 ## 数据与密钥位置
 
 - 应用数据目录（`getApplicationSupportDirectory()`）：
