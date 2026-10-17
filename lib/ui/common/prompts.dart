@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../design/overlays.dart';
+
 /// Serializes modal prompts so only one is shown at a time. Shared by the host
 /// key verifier and the SSH auth prompts, because all of them push onto the
 /// same navigator and SSH handshakes are serial.
@@ -73,8 +75,8 @@ Future<T?> showTermoraDialog<T>(
   final context = navigatorKey.currentState?.overlay?.context ??
       navigatorKey.currentContext;
   if (context == null) return Future<T?>.value(null);
-  return showDialog<T>(
-    context: context,
+  return showAppDialog<T>(
+    context,
     barrierDismissible: barrierDismissible,
     builder: builder,
   );

@@ -70,6 +70,15 @@ just sshd-down
 
 Runner 上的步骤就是本仓库的 `just` 任务（`analyze` / `test` / `test-integration` / `build-linux` / `build-apk`），因此本地跑通即等同于 CI 跑通。APK 使用 `flutter create` 模板自带的 debug keystore 签名，仅供测试，不可用于分发。
 
+发布流程：推送 `v*` 标签即触发构建，并创建 GitHub Release（附 `termora-linux-x64.zip` 与 `app-release.apk`）：
+
+```sh
+git tag -a v1.0.0 -m "Termora 1.0.0"
+git push origin v1.0.0
+```
+
+Release 步骤是幂等的，重跑同标签的构建只会覆盖附件，不会报错。
+
 ## 数据与密钥位置
 
 - 应用数据目录（`getApplicationSupportDirectory()`）：

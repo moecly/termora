@@ -8,6 +8,7 @@ import '../data/secret_store.dart';
 import '../data/server_repository.dart';
 import '../data/settings_repository.dart';
 import '../design/app_theme.dart';
+import '../design/motion.dart';
 import '../session/hardware_key_service.dart';
 import '../session/session_manager.dart';
 import '../ssh/connection_factory.dart';
@@ -168,6 +169,8 @@ class _TermoraAppState extends State<TermoraApp> with WidgetsBindingObserver {
             theme: termoraTheme(Brightness.light),
             darkTheme: termoraTheme(Brightness.dark),
             themeMode: _themeMode(widget.settings.settings.theme),
+            themeAnimationDuration: Motion.control,
+            themeAnimationCurve: Motion.easeInOut,
             builder: (context, child) => MediaQuery.withClampedTextScaling(
               minScaleFactor: 1.0,
               maxScaleFactor: 1.3,

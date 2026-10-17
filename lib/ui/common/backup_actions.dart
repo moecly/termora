@@ -4,6 +4,7 @@ import '../../app/app.dart';
 import '../../data/backup_codec.dart';
 import '../../data/backup_io.dart';
 import '../../data/server_repository.dart';
+import '../../design/overlays.dart';
 
 String _triple(String host, int port, String username) =>
     '$host\u0000$port\u0000$username';
@@ -16,8 +17,8 @@ Future<void> exportBackup(BuildContext context) async {
   final scope = ServicesScope.of(context);
   var includeSecrets = false;
 
-  final proceed = await showDialog<bool>(
-    context: context,
+  final proceed = await showAppDialog<bool>(
+    context,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
         title: const Text('导出配置'),
@@ -54,8 +55,8 @@ Future<void> exportBackup(BuildContext context) async {
   if (proceed != true || !context.mounted) return;
 
   if (includeSecrets) {
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await showAppDialog<bool>(
+      context,
       builder: (context) => AlertDialog(
         title: const Text('确认导出明文凭证'),
         content: const Text('导出的文件将包含明文密码/私钥，确定继续吗？'),

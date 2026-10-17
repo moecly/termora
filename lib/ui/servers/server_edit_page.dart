@@ -1,10 +1,13 @@
+import 'package:animations/animations.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/app.dart';
 import '../../data/models.dart';
+import '../../design/motion.dart';
 import '../../design/tokens.dart';
+import '../../design/widgets/section_header.dart';
 
 /// Create/edit form for a [ServerConfig].
 class ServerEditPage extends StatefulWidget {
@@ -194,112 +197,201 @@ class _ServerEditPageState extends State<ServerEditPage> {
       appBar: AppBar(
         title: Text(_isEditing ? '编辑服务器' : '新增服务器'),
         actions: [
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: const Text('保存'),
+          SizedBox(
+            width: 64,
+            child: AnimatedSwitcher(
+              duration: Motion.control,
+              child: _saving
+                  ? const Center(
+                      key: ValueKey('saving'),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : TextButton(
+                      key: const ValueKey('save'),
+                      onPressed: _save,
+                      child: const Text('保存'),
+                    ),
+            ),
           ),
+          const SizedBox(width: Space.x2),
         ],
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(Space.x4),
+          padding: const EdgeInsets.symmetric(vertical: Space.x2),
           children: [
-            _section(context, '基本信息'),
-            _text(_name, '名称', validator: (v) {
-              final value = (v ?? '').trim();
-              if (value.isEmpty) return '请输入名称';
-              if (value.length > 64) return '名称不能超过 64 个字符';
-              return null;
-            }),
-            _text(_host, '主机', hint: 'IP 或域名', keyboardType: TextInputType.url, validator: (v) {
-              final value = (v ?? '').trim();
-              if (value.isEmpty) return '请输入主机地址';
-              if (RegExp(r'\s').hasMatch(value)) return '主机地址不能包含空白字符';
-              return null;
-            }),
-            _text(_port, '端口', keyboardType: TextInputType.number, validator: (v) {
-              final port = int.tryParse((v ?? '').trim());
-              if (port == null || port < 1 || port > 65535) return '端口需为 1-65535';
-              return null;
-            }),
-            _text(_username, '用户名', validator: (v) {
-              if ((v ?? '').trim().isEmpty) return '请输入用户名';
-              return null;
-            }),
-            _section(context, '认证'),
-            SegmentedButton<AuthMethod>(
-              segments: const [
-                ButtonSegment(value: AuthMethod.password, label: Text('密码')),
-                ButtonSegment(value: AuthMethod.privateKey, label: Text('密钥')),
+            _card(
+              title: '基本信息',
+              children: [
+                _text(_name, '名称', validator: (v) {
+                  final value = (v ?? '').trim();
+                  if (value.isEmpty) return '请输入名称';
+                  if (value.length > 64) return '名称不能超过 64 个字符';
+                  return null;
+                }),
+                _text(_host, '主机', hint: 'IP 或域名', keyboardType: TextInputType.url, validator: (v) {
+                  final value = (v ?? '').trim();
+                  if (value.isEmpty) return '请输入主机地址';
+                  if (RegExp(r'\s').hasMatch(value)) return '主机地址不能包含空白字符';
+                  return null;
+                }),
+                _text(_port, '端口', keyboardType: TextInputType.number, validator: (v) {
+                  final port = int.tryParse((v ?? '').trim());
+                  if (port == null || port < 1 || port > 65535) return '端口需为 1-65535';
+                  return null;
+                }),
+                _text(_username, '用户名', validator: (v) {
+                  if ((v ?? '').trim().isEmpty) return '请输入用户名';
+                  return null;
+                }),
               ],
-              selected: {_method},
-              onSelectionChanged: (s) => setState(() => _method = s.first),
             ),
-            const SizedBox(height: Space.x3),
-            if (_method == AuthMethod.password) ...[
-              _text(_password, '密码', obscure: true),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _rememberPassword,
-                onChanged: (v) => setState(() => _rememberPassword = v),
-                title: const Text('记住密码'),
-              ),
-            ] else ...[
-              _text(_privateKey, '私钥内容（PEM）', maxLines: 5),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _importKeyFromFile,
-                  icon: const Icon(Icons.file_open_outlined, size: 18),
-                  label: const Text('从文件导入'),
+            _card(
+              title: '认证',
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+                  child: SegmentedButton<AuthMethod>(
+                    segments: const [
+                      ButtonSegment(value: AuthMethod.password, label: Text('密码')),
+                      ButtonSegment(value: AuthMethod.privateKey, label: Text('密钥')),
+                    ],
+                    selected: {_method},
+                    onSelectionChanged: (s) => setState(() => _method = s.first),
+                  ),
                 ),
-              ),
-              _text(_passphrase, '私钥口令（可选）', obscure: true),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _rememberPassphrase,
-                onChanged: (v) => setState(() => _rememberPassphrase = v),
-                title: const Text('记住口令'),
-              ),
-            ],
-            _section(context, '分组'),
-            DropdownButtonFormField<String?>(
-              initialValue: _groupId,
-              decoration: const InputDecoration(labelText: '分组'),
-              items: [
-                const DropdownMenuItem<String?>(value: null, child: Text('未分组')),
-                for (final group in groups)
-                  DropdownMenuItem<String?>(value: group.id, child: Text(group.name)),
+                const SizedBox(height: Space.x3),
+                AnimatedSize(
+                  duration: Motion.panel,
+                  curve: Motion.emphasized,
+                  child: PageTransitionSwitcher(
+                    duration: Motion.tab,
+                    transitionBuilder: (child, a, b) => SharedAxisTransition(
+                      animation: a,
+                      secondaryAnimation: b,
+                      transitionType: SharedAxisTransitionType.vertical,
+                      child: child,
+                    ),
+                    child: KeyedSubtree(
+                      key: ValueKey(_method),
+                      child: _method == AuthMethod.password
+                          ? _passwordFields()
+                          : _keyFields(),
+                    ),
+                  ),
+                ),
               ],
-              onChanged: (value) => setState(() => _groupId = value),
             ),
-            _section(context, '备注'),
-            _text(_note, '备注（可选）', maxLines: 3),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _favorite,
-              onChanged: (v) => setState(() => _favorite = v),
-              title: const Text('收藏'),
+            _card(
+              title: '分组',
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+                  child: DropdownButtonFormField<String?>(
+                    initialValue: _groupId,
+                    decoration: const InputDecoration(labelText: '分组'),
+                    items: [
+                      const DropdownMenuItem<String?>(value: null, child: Text('未分组')),
+                      for (final group in groups)
+                        DropdownMenuItem<String?>(value: group.id, child: Text(group.name)),
+                    ],
+                    onChanged: (value) => setState(() => _groupId = value),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: Space.x4),
+            _card(
+              title: '备注',
+              children: [
+                _text(_note, '备注（可选）', maxLines: 3),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _favorite,
+                    onChanged: (v) => setState(() => _favorite = v),
+                    title: const Text('收藏'),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _section(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.only(top: Space.x5, bottom: Space.x2),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 0.4,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+  Widget _passwordFields() {
+    return Column(
+      children: [
+        _text(_password, '密码', obscure: true),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _rememberPassword,
+            onChanged: (v) => setState(() => _rememberPassword = v),
+            title: const Text('记住密码'),
+          ),
         ),
+      ],
+    );
+  }
+
+  Widget _keyFields() {
+    return Column(
+      children: [
+        _text(_privateKey, '私钥内容（PEM）', maxLines: 5),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Space.x1),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _importKeyFromFile,
+              icon: const Icon(Icons.file_open_outlined, size: 18),
+              label: const Text('从文件导入'),
+            ),
+          ),
+        ),
+        _text(_passphrase, '私钥口令（可选）', obscure: true),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _rememberPassphrase,
+            onChanged: (v) => setState(() => _rememberPassphrase = v),
+            title: const Text('记住口令'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _card({required String title, required List<Widget> children}) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final border = dark ? AppColors.darkBorder : AppColors.lightBorder;
+    final surface = dark ? AppColors.darkSurface : AppColors.lightSurface;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x2),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: border),
+        boxShadow: AppShadows.of(theme.brightness, 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionHeader(title: title, dense: true),
+          ...children,
+          const SizedBox(height: Space.x2),
+        ],
       ),
     );
   }
@@ -314,7 +406,11 @@ class _ServerEditPageState extends State<ServerEditPage> {
     String? Function(String?)? validator,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: Space.x3),
+      padding: const EdgeInsets.only(
+        left: Space.x3,
+        right: Space.x3,
+        bottom: Space.x3,
+      ),
       child: TextFormField(
         controller: controller,
         obscureText: obscure,

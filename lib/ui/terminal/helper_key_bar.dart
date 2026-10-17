@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:xterm2/xterm.dart';
 
+import '../../design/motion.dart';
 import '../../design/tokens.dart';
+import '../../design/widgets/pressable.dart';
 import '../../session/terminal_session.dart';
 
 /// The on-screen helper key bar (Esc, Ctrl, arrows, symbols, clipboard, ...).
@@ -112,45 +114,43 @@ class _KeyCap extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
+    final enabled = onTap != null;
     final bg = active
         ? AppColors.accentSoft
         : (dark ? AppColors.darkSurfaceHigh : AppColors.lightSurfaceHigh);
-    final fg = active
-        ? AppColors.accent
-        : theme.colorScheme.onSurfaceVariant;
-    final enabled = onTap != null;
+    final fg = active ? AppColors.accent : theme.colorScheme.onSurfaceVariant;
 
     return Padding(
       padding: const EdgeInsets.only(right: 6),
-      child: Opacity(
+      child: AnimatedOpacity(
         opacity: enabled ? 1 : 0.4,
-        child: Material(
-          color: bg,
-          borderRadius: BorderRadius.circular(Radii.sm),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(Radii.sm),
-            child: Container(
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 32),
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(Radii.sm),
-                border: Border.all(
-                  color: active ? AppColors.accent : Colors.transparent,
-                ),
+        duration: Motion.hover,
+        child: Pressable(
+          onTap: onTap,
+          pressedScale: 0.94,
+          child: AnimatedContainer(
+            duration: Motion.control,
+            curve: Motion.emphasized,
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 32),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(Radii.sm),
+              border: Border.all(
+                color: active ? AppColors.accent : Colors.transparent,
               ),
-              child: icon != null
-                  ? Icon(icon, size: 18, color: fg)
-                  : Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: fg,
-                      ),
-                    ),
             ),
+            child: icon != null
+                ? Icon(icon, size: 18, color: fg)
+                : Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: fg,
+                    ),
+                  ),
           ),
         ),
       ),

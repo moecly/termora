@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../session/session_status.dart';
+import '../motion.dart';
 import '../tokens.dart';
 
 /// A small colored dot reflecting a session's status. The `connecting` state
-/// gently pulses its opacity.
+/// gently pulses its opacity (skipped under reduced motion).
 class StatusDot extends StatefulWidget {
   const StatusDot({super.key, required this.status, this.size = 8});
 
@@ -21,27 +22,26 @@ class _StatusDotState extends State<StatusDot> with SingleTickerProviderStateMix
   bool get _pulses => widget.status == SessionStatus.connecting;
 
   @override
-  void initState() {
-    super.initState();
-    if (_pulses) _startController();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
   }
 
   @override
   void didUpdateWidget(StatusDot oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_pulses && _controller == null) {
-      _startController();
-    } else if (!_pulses && _controller != null) {
+    _sync();
+  }
+
+  void _sync() {
+    final shouldPulse = _pulses && !AppMotion.reduced(context);
+    if (shouldPulse && _controller == null) {
+      _controller = AnimationController(vsync: this, duration: Motion.pulse)
+        ..repeat(reverse: true);
+    } else if (!shouldPulse && _controller != null) {
       _controller!.dispose();
       _controller = null;
     }
-  }
-
-  void _startController() {
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
   }
 
   @override
@@ -63,7 +63,10 @@ class _StatusDotState extends State<StatusDot> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    final dot = Container(
+    final reduced = AppMotion.reduced(context);
+    final dot = AnimatedContainer(
+      duration: reduced ? Duration.zero : Motion.control,
+      curve: Motion.easeInOut,
       width: widget.size,
       height: widget.size,
       decoration: BoxDecoration(color: _color(context), shape: BoxShape.circle),
