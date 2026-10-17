@@ -1,0 +1,5 @@
+tags:
+  integration:
+    # These need a local sshd (127.0.0.1:2222); see tool/local-sshd.sh.
+    # They also self-skip when the fixtures are absent, so plain `flutter test`
+    # stays green. Run them with: just sshd-up && just test-integration

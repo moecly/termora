@@ -1,0 +1,10 @@
+.direnv/
+result
+.dart_tool/
+.gradle/
+.android/
+.idea/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
