@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -60,6 +61,9 @@ jobs:
     name: Build artifacts
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # `gh release create` below needs write access; everything else only reads.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
 
@@ -94,3 +98,24 @@ jobs:
           name: termora-android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      - name: Package Linux bundle
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          cd build/linux/x64/release
+          zip -r "$GITHUB_WORKSPACE/termora-linux-x64.zip" bundle
+
+      # Idempotent, so re-running a tag build updates the release instead of
+      # failing on the existing one.
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          gh release view "$tag" >/dev/null 2>&1 ||
+            gh release create "$tag" --title "$tag" --generate-notes
+          gh release upload "$tag" --clobber \
+            termora-linux-x64.zip \
+            build/app/outputs/flutter-apk/app-release.apk
