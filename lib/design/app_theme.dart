@@ -1,14 +1,52 @@
-import 'package:animations/animations.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'motion.dart';
+import 'palette.dart';
 import 'tokens.dart';
 
-/// Route transition using shared-axis horizontal motion: the incoming page
-/// fades in while shifting slightly, direction encodes navigation depth.
-class TermoraSharedAxisPageTransitionsBuilder extends PageTransitionsBuilder {
-  const TermoraSharedAxisPageTransitionsBuilder();
+/// Depth-advance page transition: the incoming page fades in and settles from a
+/// slightly scaled/offset state, while the outgoing page (secondary) slides out.
+/// Under reduced motion the child is returned unchanged.
+class TermoraPageTransition extends StatelessWidget {
+  const TermoraPageTransition({
+    super.key,
+    required this.animation,
+    required this.secondaryAnimation,
+    required this.child,
+  });
+
+  final Animation<double> animation;
+  final Animation<double> secondaryAnimation;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (AppMotion.reduced(context)) return child;
+    return AnimatedBuilder(
+      animation: Listenable.merge([animation, secondaryAnimation]),
+      child: child,
+      builder: (context, child) {
+        final t = Motion.emphasized.transform(animation.value.clamp(0.0, 1.0));
+        final s =
+            Motion.emphasized.transform(secondaryAnimation.value.clamp(0.0, 1.0));
+        return Transform.scale(
+          scale: 1 + 0.012 * (1 - t),
+          child: Transform.translate(
+            offset: Offset(-28 * s, 18 * (1 - t)),
+            child: Opacity(
+              opacity: (t * (1 - 0.15 * s)).clamp(0.0, 1.0),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class TermoraPageTransitionsBuilder extends PageTransitionsBuilder {
+  const TermoraPageTransitionsBuilder();
 
   @override
   Widget buildTransitions<T>(
@@ -19,10 +57,9 @@ class TermoraSharedAxisPageTransitionsBuilder extends PageTransitionsBuilder {
     Widget child,
   ) {
     if (AppMotion.reduced(context)) return child;
-    return SharedAxisTransition(
+    return TermoraPageTransition(
       animation: animation,
       secondaryAnimation: secondaryAnimation,
-      transitionType: SharedAxisTransitionType.horizontal,
       child: child,
     );
   }
@@ -33,15 +70,15 @@ TextTheme _textTheme(Color primary) {
       .apply(bodyColor: primary, displayColor: primary)
       .copyWith(
         headlineSmall: TextStyle(
-          fontSize: 24,
+          fontSize: 26,
           fontWeight: FontWeight.w600,
-          letterSpacing: -0.5,
+          letterSpacing: -0.6,
           color: primary,
         ),
         titleLarge: TextStyle(
-          fontSize: 20,
+          fontSize: 22,
           fontWeight: FontWeight.w600,
-          letterSpacing: -0.3,
+          letterSpacing: -0.4,
           color: primary,
         ),
         titleMedium: TextStyle(
@@ -87,67 +124,45 @@ TextTheme _textTheme(Color primary) {
         labelSmall: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
-          letterSpacing: 0.4,
+          letterSpacing: 0.6,
           color: primary,
         ),
       );
 }
 
 ThemeData termoraTheme(Brightness brightness) {
-  final dark = brightness == Brightness.dark;
-
-  final bg = dark ? AppColors.darkBg : AppColors.lightBg;
-  final surface = dark ? AppColors.darkSurface : AppColors.lightSurface;
-  final surfaceHigh =
-      dark ? AppColors.darkSurfaceHigh : AppColors.lightSurfaceHigh;
-  final surfaceHighest =
-      dark ? AppColors.darkSurfaceHighest : AppColors.lightSurfaceHighest;
-  final border = dark ? AppColors.darkBorder : AppColors.lightBorder;
-  final textPrimary =
-      dark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
-  final textSecondary =
-      dark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
-  final textTertiary =
-      dark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary;
-  final scrim = dark ? AppColors.darkScrim : AppColors.lightScrim;
-  final hoverOverlay =
-      dark ? AppColors.darkHoverOverlay : AppColors.lightHoverOverlay;
-  final pressedOverlay =
-      dark ? AppColors.darkPressedOverlay : AppColors.lightPressedOverlay;
-  final surfaceSunken =
-      dark ? AppColors.darkSurface : AppColors.lightSurfaceSunken;
-
-  final textTheme = _textTheme(textPrimary);
+  final p = brightness == Brightness.dark ? AppPalette.dark : AppPalette.light;
+  final textTheme = _textTheme(p.textPrimary);
 
   final colorScheme = ColorScheme(
     brightness: brightness,
-    primary: AppColors.accent,
-    onPrimary: Colors.white,
-    primaryContainer: AppColors.accentSoft,
-    onPrimaryContainer: textPrimary,
-    secondary: AppColors.accent,
-    onSecondary: Colors.white,
-    secondaryContainer: AppColors.accentSoft,
-    onSecondaryContainer: textPrimary,
-    error: AppColors.danger,
+    primary: p.accent,
+    onPrimary: p.onAccent,
+    primaryContainer: p.accentSoft,
+    onPrimaryContainer: p.textPrimary,
+    secondary: p.accent,
+    onSecondary: p.onAccent,
+    secondaryContainer: p.accentSoft,
+    onSecondaryContainer: p.textPrimary,
+    error: p.danger,
     onError: Colors.white,
-    errorContainer: AppColors.dangerSoft,
-    onErrorContainer: textPrimary,
-    surface: surface,
-    onSurface: textPrimary,
-    surfaceContainerLowest: bg,
-    surfaceContainerLow: bg,
-    surfaceContainer: surface,
-    surfaceContainerHigh: surfaceHigh,
-    surfaceContainerHighest: surfaceHighest,
-    onSurfaceVariant: textSecondary,
-    outline: border,
-    outlineVariant: border,
+    errorContainer: p.dangerSoft,
+    onErrorContainer: p.textPrimary,
+    surface: p.surface,
+    onSurface: p.textPrimary,
+    surfaceContainerLowest: p.bg,
+    surfaceContainerLow: p.bg,
+    surfaceContainer: p.surface,
+    surfaceContainerHigh: p.surfaceHigh,
+    surfaceContainerHighest: p.surfaceHighest,
+    onSurfaceVariant: p.textSecondary,
+    outline: p.border,
+    outlineVariant: p.border,
     shadow: Colors.black,
-    scrim: scrim,
-    inverseSurface: textPrimary,
-    onInverseSurface: bg,
-    inversePrimary: AppColors.accent,
+    scrim: p.scrim,
+    inverseSurface: p.textPrimary,
+    onInverseSurface: p.bg,
+    inversePrimary: p.accent,
   );
 
   RoundedRectangleBorder radius(double r, {Color? side}) =>
@@ -160,20 +175,21 @@ ThemeData termoraTheme(Brightness brightness) {
     useMaterial3: true,
     brightness: brightness,
     colorScheme: colorScheme,
-    scaffoldBackgroundColor: bg,
+    scaffoldBackgroundColor: p.bg,
     textTheme: textTheme,
-    hoverColor: hoverOverlay,
-    splashColor: AppColors.accentSoft,
-    highlightColor: pressedOverlay,
+    extensions: [p],
+    hoverColor: p.hoverOverlay,
+    splashColor: p.accentSoft,
+    highlightColor: p.pressedOverlay,
     visualDensity: VisualDensity.standard,
     materialTapTargetSize: MaterialTapTargetSize.padded,
-    dividerTheme: DividerThemeData(thickness: 1, color: border, space: 1),
+    dividerTheme: DividerThemeData(thickness: 1, color: p.border, space: 1),
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
-        TargetPlatform.android: TermoraSharedAxisPageTransitionsBuilder(),
-        TargetPlatform.linux: TermoraSharedAxisPageTransitionsBuilder(),
-        TargetPlatform.windows: TermoraSharedAxisPageTransitionsBuilder(),
-        TargetPlatform.macOS: TermoraSharedAxisPageTransitionsBuilder(),
+        TargetPlatform.android: TermoraPageTransitionsBuilder(),
+        TargetPlatform.linux: TermoraPageTransitionsBuilder(),
+        TargetPlatform.windows: TermoraPageTransitionsBuilder(),
+        TargetPlatform.macOS: TermoraPageTransitionsBuilder(),
         TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
       },
     ),
@@ -183,9 +199,9 @@ ThemeData termoraTheme(Brightness brightness) {
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       centerTitle: false,
-      foregroundColor: textPrimary,
+      foregroundColor: p.textPrimary,
       titleTextStyle: textTheme.titleMedium,
-      iconTheme: IconThemeData(color: textPrimary, size: 20),
+      iconTheme: IconThemeData(color: p.textPrimary, size: 20),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: ButtonStyle(
@@ -200,21 +216,21 @@ ThemeData termoraTheme(Brightness brightness) {
         overlayColor: const WidgetStatePropertyAll(Colors.transparent),
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) {
-            return AppColors.accent.withValues(alpha: 0.38);
+            return p.accent.withValues(alpha: 0.38);
           }
           if (states.contains(WidgetState.pressed)) {
-            return AppColors.accentPressed;
+            return p.accentPressed;
           }
           if (states.contains(WidgetState.hovered)) {
-            return AppColors.accentHover;
+            return p.accentHover;
           }
-          return AppColors.accent;
+          return p.accent;
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) {
-            return Colors.white.withValues(alpha: 0.6);
+            return p.onAccent.withValues(alpha: 0.6);
           }
-          return Colors.white;
+          return p.onAccent;
         }),
       ),
     ),
@@ -222,23 +238,23 @@ ThemeData termoraTheme(Brightness brightness) {
       style: ButtonStyle(
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.pressed)) {
-            return AppColors.accentPressed;
+            return p.accentPressed;
           }
           if (states.contains(WidgetState.hovered)) {
-            return AppColors.accentHover;
+            return p.accentHover;
           }
-          return AppColors.accent;
+          return p.accent;
         }),
-        overlayColor: const WidgetStatePropertyAll(AppColors.accentSoft),
+        overlayColor: WidgetStatePropertyAll(p.accentSoft),
         shape: WidgetStatePropertyAll(radius(Radii.md)),
         animationDuration: Motion.hover,
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: ButtonStyle(
-        side: WidgetStatePropertyAll(BorderSide(color: border)),
-        foregroundColor: WidgetStatePropertyAll(textPrimary),
-        overlayColor: WidgetStatePropertyAll(hoverOverlay),
+        side: WidgetStatePropertyAll(BorderSide(color: p.border)),
+        foregroundColor: WidgetStatePropertyAll(p.textPrimary),
+        overlayColor: WidgetStatePropertyAll(p.hoverOverlay),
         shape: WidgetStatePropertyAll(radius(Radii.md)),
         animationDuration: Motion.hover,
       ),
@@ -253,13 +269,13 @@ ThemeData termoraTheme(Brightness brightness) {
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.pressed) ||
               states.contains(WidgetState.hovered)) {
-            return textPrimary;
+            return p.textPrimary;
           }
-          return textSecondary;
+          return p.textSecondary;
         }),
         overlayColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.pressed)) return pressedOverlay;
-          if (states.contains(WidgetState.hovered)) return hoverOverlay;
+          if (states.contains(WidgetState.pressed)) return p.pressedOverlay;
+          if (states.contains(WidgetState.hovered)) return p.hoverOverlay;
           return Colors.transparent;
         }),
       ),
@@ -267,25 +283,25 @@ ThemeData termoraTheme(Brightness brightness) {
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         animationDuration: Motion.control,
-        side: WidgetStatePropertyAll(BorderSide(color: border)),
+        side: WidgetStatePropertyAll(BorderSide(color: p.border)),
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.accentSoft;
+            return p.accentSoft;
           }
           return Colors.transparent;
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.accent;
+            return p.accent;
           }
-          return textSecondary;
+          return p.textSecondary;
         }),
         textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: surfaceSunken,
+      fillColor: p.surfaceSunken,
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: Space.x3,
@@ -293,65 +309,64 @@ ThemeData termoraTheme(Brightness brightness) {
       ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(Radii.md),
-        borderSide: BorderSide(color: border),
+        borderSide: BorderSide(color: p.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(Radii.md),
-        borderSide: BorderSide(color: border),
+        borderSide: BorderSide(color: p.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(Radii.md),
-        borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+        borderSide: BorderSide(color: p.accent, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(Radii.md),
-        borderSide: const BorderSide(color: AppColors.danger),
+        borderSide: BorderSide(color: p.danger),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(Radii.md),
-        borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
+        borderSide: BorderSide(color: p.danger, width: 1.5),
       ),
-      hintStyle: TextStyle(color: textTertiary),
+      hintStyle: TextStyle(color: p.textTertiary),
       labelStyle: textTheme.labelMedium,
-      errorStyle: textTheme.labelSmall?.copyWith(color: AppColors.danger),
-      prefixIconColor: textTertiary,
-      suffixIconColor: textTertiary,
-      iconColor: textTertiary,
+      errorStyle: textTheme.labelSmall?.copyWith(color: p.danger),
+      prefixIconColor: p.textTertiary,
+      suffixIconColor: p.textTertiary,
+      iconColor: p.textTertiary,
     ),
     switchTheme: SwitchThemeData(
       trackColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return AppColors.accent;
-        return dark ? const Color(0xFF2A2D33) : const Color(0xFFD3D7DD);
+        if (states.contains(WidgetState.selected)) return p.accent;
+        return p.borderStrong;
       }),
       thumbColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return Colors.white;
-        return dark ? const Color(0xFF8F959F) : Colors.white;
+        if (states.contains(WidgetState.selected)) return p.onAccent;
+        return p.surface;
       }),
       trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
       trackOutlineWidth: const WidgetStatePropertyAll(0),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     ),
-    checkboxTheme: const CheckboxThemeData(
-      fillColor: WidgetStatePropertyAll(AppColors.accent),
+    checkboxTheme: CheckboxThemeData(
+      fillColor: WidgetStatePropertyAll(p.accent),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     ),
-    radioTheme: const RadioThemeData(
-      fillColor: WidgetStatePropertyAll(AppColors.accent),
+    radioTheme: RadioThemeData(
+      fillColor: WidgetStatePropertyAll(p.accent),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     ),
     sliderTheme: SliderThemeData(
-      activeTrackColor: AppColors.accent,
-      inactiveTrackColor:
-          dark ? const Color(0xFF2A2D33) : const Color(0xFFDDE1E7),
-      thumbColor: Colors.white,
-      overlayColor: AppColors.accentSoft,
+      activeTrackColor: p.accent,
+      inactiveTrackColor: p.borderStrong,
+      thumbColor: p.surface,
+      overlayColor: p.accentSoft,
       trackHeight: 3,
       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
       overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
       showValueIndicator: ShowValueIndicator.onlyForDiscrete,
     ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: AppColors.accent,
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: p.accent,
       linearMinHeight: 2,
       linearTrackColor: Colors.transparent,
     ),
@@ -364,7 +379,9 @@ ThemeData termoraTheme(Brightness brightness) {
       ),
       radius: const Radius.circular(2),
       thumbColor: WidgetStatePropertyAll(
-        dark ? Colors.white.withValues(alpha: 0.18) : Colors.black.withValues(alpha: 0.22),
+        brightness == Brightness.dark
+            ? Colors.white.withValues(alpha: 0.18)
+            : Colors.black.withValues(alpha: 0.22),
       ),
       crossAxisMargin: 2,
       mainAxisMargin: 2,
@@ -373,30 +390,29 @@ ThemeData termoraTheme(Brightness brightness) {
       waitDuration: const Duration(milliseconds: 400),
       showDuration: const Duration(seconds: 3),
       decoration: BoxDecoration(
-        color: dark ? AppColors.darkSurfaceHighest : const Color(0xFF1E2126),
+        color: p.surfaceHighest,
         borderRadius: BorderRadius.circular(Radii.sm),
       ),
       textStyle: textTheme.labelSmall?.copyWith(color: Colors.white),
       padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 6),
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: dark ? AppColors.darkSurfaceHighest : AppColors.lightSurfaceHigh,
-      shape: radius(Radii.lg, side: border),
-      elevation: 8,
-      shadowColor: Colors.black.withValues(alpha: 0.4),
+      color: p.surfaceHighest,
+      shape: radius(Radii.lg, side: p.border),
+      elevation: 0,
       position: PopupMenuPosition.under,
       menuPadding: const EdgeInsets.all(Space.x1),
       textStyle: textTheme.labelLarge,
-      iconColor: textSecondary,
+      iconColor: p.textSecondary,
     ),
     dialogTheme: DialogThemeData(
       shape: radius(Radii.xl),
-      backgroundColor: surfaceHigh,
+      backgroundColor: p.surfaceHigh,
       elevation: 0,
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       titleTextStyle: textTheme.titleMedium,
       contentTextStyle: textTheme.bodyMedium,
-      barrierColor: scrim,
+      barrierColor: p.scrim,
       actionsPadding: const EdgeInsets.fromLTRB(
         Space.x4,
         0,
@@ -405,11 +421,11 @@ ThemeData termoraTheme(Brightness brightness) {
       ),
     ),
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: surfaceHigh,
-      modalBackgroundColor: surfaceHigh,
+      backgroundColor: p.surfaceHigh,
+      modalBackgroundColor: p.surfaceHigh,
       elevation: 0,
       showDragHandle: true,
-      dragHandleColor: textTertiary,
+      dragHandleColor: p.textTertiary,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.xl)),
       ),
@@ -418,34 +434,34 @@ ThemeData termoraTheme(Brightness brightness) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       shape: radius(Radii.lg),
-      backgroundColor: surfaceHigh,
+      backgroundColor: p.surfaceHigh,
       elevation: 2,
       insetPadding: const EdgeInsets.all(Space.x4),
       showCloseIcon: true,
-      closeIconColor: textTertiary,
-      actionTextColor: AppColors.accent,
+      closeIconColor: p.textTertiary,
+      actionTextColor: p.accent,
       contentTextStyle: textTheme.labelLarge,
     ),
     listTileTheme: ListTileThemeData(
       contentPadding: const EdgeInsets.symmetric(horizontal: Space.x4),
       minVerticalPadding: Space.x3,
       titleTextStyle: textTheme.labelLarge,
-      subtitleTextStyle: textTheme.bodySmall?.copyWith(color: textSecondary),
-      iconColor: textSecondary,
-      selectedColor: AppColors.accent,
-      selectedTileColor: AppColors.accentSoft,
+      subtitleTextStyle: textTheme.bodySmall?.copyWith(color: p.textSecondary),
+      iconColor: p.textSecondary,
+      selectedColor: p.accent,
+      selectedTileColor: p.accentSoft,
     ),
     cardTheme: CardThemeData(
       elevation: 0,
-      color: surface,
+      color: p.surface,
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      shape: radius(Radii.lg, side: border),
+      shape: radius(Radii.lg, side: p.border),
     ),
-    textSelectionTheme: const TextSelectionThemeData(
-      cursorColor: AppColors.accent,
-      selectionColor: AppColors.accentSoft,
-      selectionHandleColor: AppColors.accent,
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: p.accent,
+      selectionColor: p.accentSoft,
+      selectionHandleColor: p.accent,
     ),
   );
 }

@@ -32,6 +32,7 @@ void main() {
     expect(repo.settings.scrollbackLines, 5000);
     expect(repo.settings.rememberPasswordsByDefault, isFalse);
     expect(repo.settings.keepScreenOn, isTrue);
+    expect(repo.settings.terminalImmersiveChrome, isTrue);
     expect(
       repo.settings.keyMappings,
       const [KeyMapping(source: 'volumeDown', action: 'ctrl')],

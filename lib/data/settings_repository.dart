@@ -27,6 +27,7 @@ class AppSettings {
     this.connectTimeoutSeconds = 15,
     this.rememberPasswordsByDefault = false,
     this.keepScreenOn = true,
+    this.terminalImmersiveChrome = true,
     this.keyMappings = kDefaultKeyMappings,
   });
 
@@ -49,6 +50,9 @@ class AppSettings {
   /// Keeps the screen awake while a terminal session is open.
   final bool keepScreenOn;
 
+  /// 终端页自动隐藏顶栏与键位甲板；任意输入后恢复。
+  final bool terminalImmersiveChrome;
+
   /// Android hardware-key → terminal-action mappings.
   final List<KeyMapping> keyMappings;
 
@@ -61,6 +65,7 @@ class AppSettings {
     int? connectTimeoutSeconds,
     bool? rememberPasswordsByDefault,
     bool? keepScreenOn,
+    bool? terminalImmersiveChrome,
     List<KeyMapping>? keyMappings,
   }) {
     return AppSettings(
@@ -73,6 +78,8 @@ class AppSettings {
       rememberPasswordsByDefault:
           rememberPasswordsByDefault ?? this.rememberPasswordsByDefault,
       keepScreenOn: keepScreenOn ?? this.keepScreenOn,
+      terminalImmersiveChrome:
+          terminalImmersiveChrome ?? this.terminalImmersiveChrome,
       keyMappings: keyMappings ?? this.keyMappings,
     );
   }
@@ -86,6 +93,7 @@ class AppSettings {
         'connectTimeoutSeconds': connectTimeoutSeconds,
         'rememberPasswordsByDefault': rememberPasswordsByDefault,
         'keepScreenOn': keepScreenOn,
+        'terminalImmersiveChrome': terminalImmersiveChrome,
         'keyMappings': keyMappings.map((m) => m.toJson()).toList(),
       };
 
@@ -108,6 +116,8 @@ class AppSettings {
       rememberPasswordsByDefault:
           json['rememberPasswordsByDefault'] as bool? ?? defaults.rememberPasswordsByDefault,
       keepScreenOn: json['keepScreenOn'] as bool? ?? defaults.keepScreenOn,
+      terminalImmersiveChrome:
+          json['terminalImmersiveChrome'] as bool? ?? defaults.terminalImmersiveChrome,
       keyMappings: _parseKeyMappings(json['keyMappings']) ?? defaults.keyMappings,
     );
   }
@@ -137,6 +147,7 @@ class AppSettings {
       other.connectTimeoutSeconds == connectTimeoutSeconds &&
       other.rememberPasswordsByDefault == rememberPasswordsByDefault &&
       other.keepScreenOn == keepScreenOn &&
+      other.terminalImmersiveChrome == terminalImmersiveChrome &&
       listEquals(other.keyMappings, keyMappings);
 
   @override
@@ -149,6 +160,7 @@ class AppSettings {
         connectTimeoutSeconds,
         rememberPasswordsByDefault,
         keepScreenOn,
+        terminalImmersiveChrome,
         Object.hashAll(keyMappings),
       );
 }

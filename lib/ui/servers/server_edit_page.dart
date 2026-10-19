@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../app/app.dart';
 import '../../data/models.dart';
 import '../../design/motion.dart';
+import '../../design/palette.dart';
 import '../../design/tokens.dart';
 import '../../design/widgets/section_header.dart';
 
@@ -374,15 +375,13 @@ class _ServerEditPageState extends State<ServerEditPage> {
 
   Widget _card({required String title, required List<Widget> children}) {
     final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final border = dark ? AppColors.darkBorder : AppColors.lightBorder;
-    final surface = dark ? AppColors.darkSurface : AppColors.lightSurface;
+    final p = AppPalette.of(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x2),
       decoration: BoxDecoration(
-        color: surface,
+        color: p.surface,
         borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: border),
+        border: Border.all(color: p.border),
         boxShadow: AppShadows.of(theme.brightness, 1),
       ),
       child: Column(

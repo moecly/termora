@@ -161,4 +161,24 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     }
   });
+
+  testWidgets('command dock expands to reveal import and export', (tester) async {
+    final servers = ServerRepository(JsonStore(File('/nonexistent/servers.json')));
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      await tester.pumpWidget(_harness(servers));
+      await tester.pump();
+
+      expect(find.text('导出'), findsNothing);
+
+      await tester.tap(find.byTooltip('更多操作'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
+
+      expect(find.text('导出'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
 }

@@ -169,7 +169,7 @@ class _TermoraAppState extends State<TermoraApp> with WidgetsBindingObserver {
             theme: termoraTheme(Brightness.light),
             darkTheme: termoraTheme(Brightness.dark),
             themeMode: _themeMode(widget.settings.settings.theme),
-            themeAnimationDuration: Motion.control,
+            themeAnimationDuration: Motion.panel,
             themeAnimationCurve: Motion.easeInOut,
             builder: (context, child) => MediaQuery.withClampedTextScaling(
               minScaleFactor: 1.0,

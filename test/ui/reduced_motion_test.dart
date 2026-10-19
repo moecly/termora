@@ -1,6 +1,5 @@
 import 'dart:io' show File;
 
-import 'package:animations/animations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,7 +90,7 @@ void main() {
 
       // The shared-axis transition is skipped entirely under reduced motion.
       expect(find.text('PUSHED'), findsOneWidget);
-      expect(find.byType(SharedAxisTransition), findsNothing);
+      expect(find.byType(TermoraPageTransition), findsNothing);
 
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

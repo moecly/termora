@@ -4,12 +4,13 @@ import 'package:xterm2/xterm.dart';
 import '../../app/app.dart';
 import '../../data/key_mapping.dart';
 import '../../data/settings_repository.dart';
-import '../../design/motion.dart';
 import '../../design/overlays.dart';
+import '../../design/palette.dart';
 import '../../design/tokens.dart';
 import '../../design/widgets/animated_diff_list.dart';
 import '../../design/widgets/enter_transition.dart';
 import '../../design/widgets/section_header.dart';
+import '../../design/widgets/theme_swatch.dart';
 import '../../terminal/terminal_themes.dart';
 import '../common/backup_actions.dart';
 
@@ -91,6 +92,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     trailing: Text(
                       '${settings.terminalFontSize.round()} pt',
                       style: const TextStyle(fontFamily: 'monospace'),
+                    ),
+                  ),
+                  SwitchListTile(
+                    title: const Text('沉浸模式（自动隐藏终端工具栏）'),
+                    value: settings.terminalImmersiveChrome,
+                    onChanged: (v) => scope.settings.update(
+                      settings.copyWith(terminalImmersiveChrome: v),
                     ),
                   ),
                   const Padding(
@@ -278,17 +286,15 @@ class _SettingsPageState extends State<SettingsPage> {
     required List<Widget> children,
   }) {
     final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final border = dark ? AppColors.darkBorder : AppColors.lightBorder;
-    final surface = dark ? AppColors.darkSurface : AppColors.lightSurface;
+    final p = AppPalette.of(context);
     return EnterTransition(
       index: index,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x2),
         decoration: BoxDecoration(
-          color: surface,
+          color: p.surface,
           borderRadius: BorderRadius.circular(Radii.lg),
-          border: Border.all(color: border),
+          border: Border.all(color: p.border),
           boxShadow: AppShadows.of(theme.brightness, 1),
         ),
         child: Column(
@@ -317,28 +323,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _swatch(TerminalTheme theme, {required bool selected}) {
-    return AnimatedContainer(
-      duration: Motion.control,
-      curve: Motion.easeInOut,
-      width: 28,
-      height: 28,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(Radii.sm),
-        border: Border.all(
-          color: selected ? AppColors.accent : Colors.transparent,
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(3),
-        child: Row(
-          children: [
-            for (final color in [theme.red, theme.green, theme.yellow, theme.blue])
-              Expanded(child: ColoredBox(color: color)),
-          ],
-        ),
-      ),
-    );
+    return TerminalThemeSwatch(theme: theme, selected: selected);
   }
 
   Future<void> _removeMapping(BuildContext context, KeyMapping mapping) async {

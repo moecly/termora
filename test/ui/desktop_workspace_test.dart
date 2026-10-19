@@ -68,30 +68,36 @@ Widget _harness() {
 }
 
 void main() {
-  testWidgets('sidebar collapses to 64 and expands back to 280', (tester) async {
+  testWidgets('rail destinations switch the navigator and the panel collapses',
+      (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     try {
       await tester.pumpWidget(_harness());
       await tester.pump();
 
-      final sidebar = find.byKey(const ValueKey('server-sidebar'));
-      expect(tester.getSize(sidebar).width, 280);
-      expect(find.text('Termora'), findsOneWidget);
-      expect(find.text('导出'), findsOneWidget);
+      // Servers destination: header and the new-server button are visible.
+      expect(find.text('服务器'), findsWidgets);
+      expect(find.text('新增服务器'), findsOneWidget);
 
+      // Switching to the sessions destination swaps the list out.
+      await tester.tap(find.byTooltip('会话'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('新增服务器'), findsNothing);
+
+      // Collapsing the navigator removes the panel contents.
       await tester.tap(find.byTooltip('折叠侧栏'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('会话'), findsNothing);
 
-      expect(tester.getSize(sidebar).width, 64);
-      expect(find.text('Termora'), findsNothing);
-      expect(find.text('导出'), findsNothing);
-
+      // Expanding it again does not throw.
       await tester.tap(find.byTooltip('展开侧栏'));
-      await tester.pumpAndSettle();
-
-      expect(tester.getSize(sidebar).width, 280);
-      expect(find.text('Termora'), findsOneWidget);
-      expect(find.text('导出'), findsOneWidget);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
       expect(tester.takeException(), isNull);
     } finally {
       debugDefaultTargetPlatformOverride = null;

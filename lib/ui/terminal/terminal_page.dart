@@ -7,13 +7,17 @@ import '../../data/settings_repository.dart';
 import '../../design/motion.dart';
 import '../../design/overlays.dart';
 import '../../design/tokens.dart';
+import '../../design/widgets/link_indicator.dart';
 import '../../design/widgets/server_avatar.dart';
+import '../../design/widgets/theme_swatch.dart';
 import '../../session/session_status.dart';
 import '../../session/terminal_session.dart';
 import '../../terminal/terminal_style.dart';
 import '../../terminal/terminal_themes.dart';
 import '../servers/server_edit_page.dart';
-import 'helper_key_bar.dart';
+import 'connect_sequence.dart';
+import 'key_deck.dart';
+import 'session_banner.dart';
 import 'terminal_viewport.dart';
 
 /// Full-screen terminal page (mobile by default; also reachable on desktop).
@@ -63,11 +67,64 @@ class _TerminalScaffold extends StatefulWidget {
   State<_TerminalScaffold> createState() => _TerminalScaffoldState();
 }
 
-class _TerminalScaffoldState extends State<_TerminalScaffold> {
+class _TerminalScaffoldState extends State<_TerminalScaffold>
+    with SingleTickerProviderStateMixin {
   bool _fullscreen = false;
+
+  /// Idle timer for the immersive chrome: when it completes (3.5s of no
+  /// input) the app bar and key deck hide to give the terminal full space.
+  late final AnimationController _idle = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3500),
+  );
 
   TerminalSession get session => widget.session;
   AppSettings get settings => widget.settings;
+
+  bool get _chromeVisible => _idle.status != AnimationStatus.completed;
+  bool get _hideChrome => _fullscreen || !_chromeVisible;
+
+  @override
+  void initState() {
+    super.initState();
+    _idle.addStatusListener(_onIdleStatus);
+    session.addListener(_onSessionChanged);
+    _ping();
+  }
+
+  @override
+  void dispose() {
+    session.removeListener(_onSessionChanged);
+    _idle.dispose();
+    super.dispose();
+  }
+
+  void _onIdleStatus(AnimationStatus status) {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(_TerminalScaffold oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!settings.terminalImmersiveChrome) {
+      if (_idle.isAnimating) _idle.stop();
+      if (_idle.value != 0) {
+        _idle.value = 0;
+        setState(() {});
+      }
+    }
+  }
+
+  void _onSessionChanged() => _ping();
+
+  /// Restarts the idle countdown; ignored when immersive mode is off.
+  void _ping() {
+    if (!settings.terminalImmersiveChrome) {
+      if (_idle.isAnimating) _idle.stop();
+      return;
+    }
+    _idle.forward(from: 0);
+  }
 
   String _statusText() {
     return switch (session.status) {
@@ -178,6 +235,10 @@ class _TerminalScaffoldState extends State<_TerminalScaffold> {
                 for (final entry in kTerminalThemes.keys)
                   RadioListTile<String>(
                     value: entry,
+                    secondary: TerminalThemeSwatch(
+                      theme: kTerminalThemes[entry]!,
+                      selected: settings.terminalThemeId == entry,
+                    ),
                     title: Text(kTerminalThemeLabels[entry] ?? entry),
                   ),
               ],
@@ -247,16 +308,25 @@ class _TerminalScaffoldState extends State<_TerminalScaffold> {
                       child: child,
                     ),
                   ),
-                  child: Text(
-                    _statusText(),
+                  child: Row(
                     key: ValueKey(_statusText()),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
-                      color: terminalStatusColor(session.status, theme),
-                    ),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      LinkIndicator(status: session.status, size: 8),
+                      const SizedBox(width: Space.x1),
+                      Flexible(
+                        child: Text(
+                          _statusText(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w400,
+                            color: terminalStatusColor(session.status, theme),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -333,14 +403,92 @@ class _TerminalScaffoldState extends State<_TerminalScaffold> {
       ],
     );
 
-    final body = Column(
+    final terminalStack = Stack(
       children: [
-        Expanded(
+        Positioned.fill(
           child: TerminalViewport(session: session, settings: settings),
         ),
-        _SelectionBar(session: session),
-        HelperKeyBar(session: session),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedSwitcher(
+              duration: AppMotion.scale(context, Motion.panel),
+              child: session.status == SessionStatus.connecting
+                  ? ColoredBox(
+                      key: const ValueKey('connecting'),
+                      color: theme.background,
+                      child: ConnectSequence(session: session),
+                    )
+                  : const SizedBox.shrink(key: ValueKey('live')),
+            ),
+          ),
+        ),
+        if (session.status == SessionStatus.failed ||
+            session.status == SessionStatus.disconnected)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SessionBanner(session: session),
+          ),
       ],
+    );
+
+    final body = AnimatedSize(
+      duration: AppMotion.scale(context, Motion.panel),
+      curve: Motion.emphasized,
+      alignment: Alignment.topCenter,
+      child: Column(
+        children: [
+          Expanded(child: terminalStack),
+          _SelectionBar(session: session),
+          KeyDeck(session: session, collapsed: _hideChrome),
+        ],
+      ),
+    );
+
+    final hiddenControls = Positioned(
+      top: 0,
+      right: 0,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(Space.x2),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: 1),
+            duration: AppMotion.scale(context, Motion.panel),
+            curve: Motion.emphasized,
+            builder: (context, t, child) => Opacity(
+              opacity: t,
+              child: Transform.scale(scale: 0.9 + 0.1 * t, child: child),
+            ),
+            child: Row(
+              children: [
+                if (_fullscreen)
+                  Padding(
+                    padding: const EdgeInsets.only(right: Space.x2),
+                    child: Material(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      shape: const CircleBorder(),
+                      child: IconButton(
+                        icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
+                        tooltip: '退出全屏',
+                        onPressed: () => setState(() => _fullscreen = false),
+                      ),
+                    ),
+                  ),
+                Material(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    tooltip: '返回',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
 
     return PopScope(
@@ -351,41 +499,25 @@ class _TerminalScaffoldState extends State<_TerminalScaffold> {
       child: Scaffold(
         backgroundColor: theme.background,
         resizeToAvoidBottomInset: true,
-        appBar: _fullscreen ? null : appBar,
-        body: _fullscreen
-            ? Stack(
-                children: [
-                  body,
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(Space.x2),
-                        child: TweenAnimationBuilder<double>(
-                          tween: Tween<double>(begin: 0, end: 1),
-                          duration: AppMotion.scale(context, Motion.panel),
-                          curve: Motion.emphasized,
-                          builder: (context, t, child) => Opacity(
-                            opacity: t,
-                            child: Transform.scale(scale: 0.9 + 0.1 * t, child: child),
-                          ),
-                          child: Material(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            shape: const CircleBorder(),
-                            child: IconButton(
-                              icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
-                              tooltip: '退出全屏',
-                              onPressed: () => setState(() => _fullscreen = false),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            : body,
+        appBar: _hideChrome ? null : appBar,
+        body: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) => _ping(),
+          onPointerMove: (_) => _ping(),
+          onPointerSignal: (_) => _ping(),
+          child: Focus(
+            onKeyEvent: (_, _) {
+              _ping();
+              return KeyEventResult.ignored;
+            },
+            child: Stack(
+              children: [
+                body,
+                if (_hideChrome) hiddenControls,
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

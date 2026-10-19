@@ -4,22 +4,27 @@ import '../../app/app.dart';
 import '../../data/models.dart';
 import '../../design/motion.dart';
 import '../../design/overlays.dart';
+import '../../design/palette.dart';
 import '../../design/route.dart';
 import '../../design/tokens.dart';
 import '../../design/widgets/animated_diff_list.dart';
 import '../../design/widgets/empty_state.dart';
 import '../../design/widgets/enter_transition.dart';
+import '../../design/widgets/link_indicator.dart';
+import '../../design/widgets/link_pulse.dart';
+import '../../design/widgets/mask_reveal.dart';
 import '../../design/widgets/pressable.dart';
 import '../../design/widgets/scroll.dart';
 import '../../design/widgets/section_header.dart';
 import '../../design/widgets/server_avatar.dart';
-import '../../design/widgets/status_dot.dart';
 import '../../session/session_status.dart';
 import '../../session/terminal_session.dart';
+import '../common/backup_actions.dart';
 import '../servers/server_edit_page.dart';
 import '../servers/server_tile.dart';
 import '../settings/settings_page.dart';
 import '../terminal/terminal_page.dart';
+import 'command_dock.dart';
 
 /// A flattened home row: a stable [key] plus a builder that renders it.
 class _HomeRow {
@@ -83,13 +88,29 @@ class _HomePageState extends State<HomePage> {
           _rowCache[row.key] = row;
         }
         final listKey = ValueKey(_query.isEmpty ? 'home-all' : 'home-q:$_query');
+        final connecting = scope.manager.sessions
+            .any((s) => s.status == SessionStatus.connecting);
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text(
-              'Termora',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
+            title: _searching
+                ? MaskReveal(
+                    axis: Axis.horizontal,
+                    open: true,
+                    child: _searchField(context),
+                  )
+                : ValueListenableBuilder<bool>(
+                    valueListenable: _lifted,
+                    builder: (context, lifted, _) => lifted
+                        ? const Text(
+                            'Termora',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
             bottom: PreferredSize(
               preferredSize: const Size(0, 1),
               child: ValueListenableBuilder<bool>(
@@ -97,10 +118,7 @@ class _HomePageState extends State<HomePage> {
                 builder: (context, lifted, _) => AnimatedOpacity(
                   duration: Motion.control,
                   opacity: lifted ? 1 : 0,
-                  child: Container(
-                    height: 1,
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
+                  child: LinkPulse(active: connecting, height: 1),
                 ),
               ),
             ),
@@ -125,43 +143,65 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
+              if (!_searching)
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
+                  ),
                 ),
-              ),
             ],
           ),
-          floatingActionButton: EnterTransition(
-            index: 0,
-            child: FloatingActionButton.extended(
-              onPressed: () => _newServer(context),
-              icon: const Icon(Icons.add),
-              label: const Text('新增服务器'),
-            ),
-          ),
-          body: CustomScrollView(
-            controller: _scroll,
-            slivers: [
-              SliverToBoxAdapter(
-                child: AnimatedSize(
-                  duration: Motion.panel,
-                  curve: Motion.emphasized,
-                  alignment: Alignment.topCenter,
-                  child: _searching
-                      ? _searchField(context)
-                      : const SizedBox(width: double.infinity, height: 0),
-                ),
+          body: Stack(
+            children: [
+              CustomScrollView(
+                controller: _scroll,
+                slivers: [
+                  AnimatedDiffList(
+                    key: listKey,
+                    sliver: true,
+                    keys: [for (final row in rows) row.key],
+                    itemBuilder: (context, index, key, animation) =>
+                        _rowCache[key]!.builder(context, index),
+                    removedBuilder: (context, key, animation) =>
+                        _rowCache[key]?.builder(context, 0) ??
+                        const SizedBox.shrink(),
+                  ),
+                ],
               ),
-              AnimatedDiffList(
-                key: listKey,
-                sliver: true,
-                keys: [for (final row in rows) row.key],
-                itemBuilder: (context, index, key, animation) => _rowCache[key]!
-                    .builder(context, index),
-                removedBuilder: (context, key, animation) =>
-                    _rowCache[key]?.builder(context, 0) ?? const SizedBox.shrink(),
+              Positioned.fill(
+                child: CommandDock(
+                  primary: DockAction(
+                    id: 'new',
+                    icon: Icons.add,
+                    label: '新增服务器',
+                    onTap: () => _newServer(context),
+                  ),
+                  actions: [
+                    DockAction(
+                      id: 'import',
+                      icon: Icons.file_upload_outlined,
+                      label: '导入',
+                      onTap: () => importBackup(context),
+                    ),
+                    DockAction(
+                      id: 'export',
+                      icon: Icons.file_download_outlined,
+                      label: '导出',
+                      onTap: () => exportBackup(context),
+                    ),
+                    DockAction(
+                      id: 'settings',
+                      icon: Icons.settings_outlined,
+                      label: '设置',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const SettingsPage(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -178,6 +218,10 @@ class _HomePageState extends State<HomePage> {
     List<ServerConfig> filtered,
   ) {
     final rows = <_HomeRow>[];
+
+    if (_query.isEmpty) {
+      rows.add(_HomeRow('row:intro', (context, index) => const _HomeIntro()));
+    }
 
     if (_query.isNotEmpty) {
       if (filtered.isEmpty) {
@@ -286,7 +330,7 @@ class _HomePageState extends State<HomePage> {
   );
 
   _HomeRow _tailRow() =>
-      _HomeRow('row:tail', (context, index) => const SizedBox(height: 88));
+      _HomeRow('row:tail', (context, index) => const SizedBox(height: 112));
 
   Widget _searchField(BuildContext context) {
     return Padding(
@@ -334,12 +378,7 @@ class _ActiveSessions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final manager = ServicesScope.of(context).manager;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final border = dark ? AppColors.darkBorder : AppColors.lightBorder;
-    final borderStrong =
-        dark ? AppColors.darkBorderStrong : AppColors.lightBorderStrong;
-    final hoverOverlay =
-        dark ? AppColors.darkHoverOverlay : AppColors.lightHoverOverlay;
+    final p = AppPalette.of(context);
     return SizedBox(
       height: 64,
       child: ScrollConfiguration(
@@ -350,61 +389,77 @@ class _ActiveSessions extends StatelessWidget {
           itemCount: sessions.length,
           itemBuilder: (context, i) {
             final session = sessions[i];
-            return Padding(
-              padding: const EdgeInsets.only(right: Space.x2),
-              child: Pressable(
-                onTap: () {
-                  manager.activate(session.id);
-                  Navigator.of(context).push(
-                    terminalRoute<void>(
-                      builder: (_) => TerminalPage(
-                        sessionId: session.id,
-                        heroTag: sessionHeroTag(session.id),
-                      ),
-                    ),
-                  );
-                },
-                onLongPress: () => _showSessionMenu(context, session),
-                child: HoverSurface(
-                  baseColor: Colors.transparent,
-                  hoverColor: hoverOverlay,
-                  borderRadius: BorderRadius.circular(Radii.md),
-                  border: BorderSide(color: border),
-                  hoverBorder: BorderSide(color: borderStrong),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-                    child: Row(
-                      children: [
-                        ServerAvatar(
-                          seed: session.server.name,
-                          size: 32,
+            return EnterTransition(
+              index: i,
+              child: Padding(
+                padding: const EdgeInsets.only(right: Space.x2),
+                child: Pressable(
+                  onTap: () {
+                    manager.activate(session.id);
+                    Navigator.of(context).push(
+                      terminalRoute<void>(
+                        builder: (_) => TerminalPage(
+                          sessionId: session.id,
                           heroTag: sessionHeroTag(session.id),
                         ),
-                        const SizedBox(width: Space.x3),
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                    );
+                  },
+                  onLongPress: () => _showSessionMenu(context, session),
+                  child: SizedBox(
+                    width: 152,
+                    height: 64,
+                    child: HoverSurface(
+                      spotlight: true,
+                      baseColor: Colors.transparent,
+                      hoverColor: p.hoverOverlay,
+                      borderRadius: BorderRadius.circular(Radii.md),
+                      border: BorderSide(color: p.border),
+                      hoverBorder: BorderSide(color: p.borderStrong),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+                        child: Row(
                           children: [
-                            Text(
-                              session.server.name,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            ServerAvatar(
+                              seed: session.server.name,
+                              size: 32,
+                              status: session.status,
+                              heroTag: sessionHeroTag(session.id),
                             ),
-                            Row(
-                              children: [
-                                StatusDot(status: session.status, size: 6),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _statusLabel(session.status),
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
+                            const SizedBox(width: Space.x3),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    session.server.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      LinkIndicator(
+                                        status: session.status,
+                                        size: 6,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _statusLabel(session.status),
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -451,6 +506,65 @@ class _ActiveSessions extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The big hero title shown at the top of the mobile home list.
+class _HomeIntro extends StatelessWidget {
+  const _HomeIntro();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, Space.x2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Termora',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.6,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'SSH 客户端',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: p.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: p.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(Radii.md),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(Radii.md),
+                child: Center(
+                  child: SizedBox(
+                    width: 28,
+                    child: LinkPulse(active: true, color: p.accent, height: 2),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

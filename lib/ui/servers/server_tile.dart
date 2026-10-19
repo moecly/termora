@@ -5,10 +5,14 @@ import '../../app/app.dart';
 import '../../data/models.dart';
 import '../../design/motion.dart';
 import '../../design/overlays.dart';
+import '../../design/palette.dart';
 import '../../design/route.dart';
 import '../../design/tokens.dart';
+import '../../design/widgets/link_indicator.dart';
+import '../../design/widgets/link_pulse.dart';
 import '../../design/widgets/pressable.dart';
 import '../../design/widgets/server_avatar.dart';
+import '../../session/session_status.dart';
 import '../terminal/terminal_page.dart';
 import 'server_edit_page.dart';
 
@@ -32,13 +36,10 @@ Future<void> openSession(
 }
 
 /// A single server row with a favorite toggle and a trailing action menu.
-///
-/// In [compact] mode only a centered avatar is rendered (collapsed sidebar).
 class ServerTile extends StatefulWidget {
-  const ServerTile({super.key, required this.server, this.compact = false});
+  const ServerTile({super.key, required this.server});
 
   final ServerConfig server;
-  final bool compact;
 
   @override
   State<ServerTile> createState() => _ServerTileState();
@@ -88,7 +89,9 @@ class _ServerTileState extends State<ServerTile> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('删除'),
           ),
         ],
@@ -105,55 +108,25 @@ class _ServerTileState extends State<ServerTile> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.compact) return _buildCompact(context);
-    return _buildFull(context);
-  }
-
-  Widget _buildCompact(BuildContext context) {
-    return Tooltip(
-      message: server.name,
-      child: Pressable(
-        onTap: _connecting ? null : () => _connect(context),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: Space.x2),
-          child: Center(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                ServerAvatar(
-                  seed: server.name,
-                  size: 32,
-                  heroTag: serverHeroTag(server.id),
-                ),
-                if (_connecting)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFull(BuildContext context) {
     final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final borderStrong =
-        dark ? AppColors.darkBorderStrong : AppColors.lightBorderStrong;
-    final hoverOverlay =
-        dark ? AppColors.darkHoverOverlay : AppColors.lightHoverOverlay;
+    final p = AppPalette.of(context);
+    final manager = ServicesScope.of(context).manager;
+    SessionStatus? activeStatus;
+    for (final s in manager.sessions) {
+      if (s.server.id == server.id) {
+        activeStatus = s.status;
+        break;
+      }
+    }
     final subtitle = '${server.username}@${server.host}:${server.port}';
 
     final row = HoverSurface(
+      spotlight: true,
       baseColor: Colors.transparent,
-      hoverColor: hoverOverlay,
+      hoverColor: p.hoverOverlay,
       borderRadius: BorderRadius.circular(Radii.md),
       border: const BorderSide(color: Colors.transparent),
-      hoverBorder: BorderSide(color: borderStrong),
+      hoverBorder: BorderSide(color: p.borderStrong),
       onTap: _connecting ? null : () => _connect(context),
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -164,6 +137,8 @@ class _ServerTileState extends State<ServerTile> {
           children: [
             ServerAvatar(
               seed: server.name,
+              size: 40,
+              status: activeStatus,
               heroTag: serverHeroTag(server.id),
             ),
             const SizedBox(width: Space.x3),
@@ -171,24 +146,41 @@ class _ServerTileState extends State<ServerTile> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    server.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          server.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      if (activeStatus != null) ...[
+                        const SizedBox(width: Space.x2),
+                        LinkIndicator(status: activeStatus, size: 8),
+                      ],
+                    ],
                   ),
                   Text(
                     subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: p.textSecondary,
                     ),
                   ),
                   if (server.note != null && server.note!.isNotEmpty)
                     Text(
                       server.note!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: p.textSecondary,
                       ),
                     ),
                 ],
@@ -197,19 +189,14 @@ class _ServerTileState extends State<ServerTile> {
             IconButton(
               tooltip: server.favorite ? '取消收藏' : '收藏',
               onPressed: () => _favorite(context),
-              icon: AnimatedSwitcher(
+              icon: AnimatedScale(
+                scale: server.favorite ? 1.15 : 1,
                 duration: Motion.control,
-                transitionBuilder: (child, animation) => ScaleTransition(
-                  scale: animation,
-                  child: FadeTransition(opacity: animation, child: child),
-                ),
+                curve: Motion.emphasized,
                 child: Icon(
                   server.favorite ? Icons.star : Icons.star_border,
-                  key: ValueKey(server.favorite),
                   size: 18,
-                  color: server.favorite
-                      ? AppColors.warning
-                      : theme.colorScheme.onSurfaceVariant,
+                  color: server.favorite ? p.warn : p.textSecondary,
                 ),
               ),
             ),
@@ -224,7 +211,9 @@ class _ServerTileState extends State<ServerTile> {
                   case 'connect':
                     await _connect(context);
                   case 'newSession':
-                    if (!_connecting) await openSession(context, server, force: true);
+                    if (!_connecting) {
+                      await openSession(context, server, force: true);
+                    }
                   case 'edit':
                     await _edit(context);
                   case 'favorite':
@@ -252,20 +241,21 @@ class _ServerTileState extends State<ServerTile> {
       ),
     );
 
-    return Opacity(
-      opacity: _connecting ? 0.7 : 1,
-      child: Stack(
-        children: [
-          row,
-          if (_connecting)
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: LinearProgressIndicator(minHeight: 2),
-            ),
-        ],
-      ),
+    return Stack(
+      children: [
+        AnimatedOpacity(
+          opacity: _connecting ? 0.7 : 1,
+          duration: Motion.control,
+          child: row,
+        ),
+        if (_connecting)
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: LinkPulse(active: true, height: 2),
+          ),
+      ],
     );
   }
 }

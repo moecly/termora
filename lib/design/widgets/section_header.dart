@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../palette.dart';
 import '../tokens.dart';
 
-/// A small uppercase section label with an optional trailing widget.
+/// A small uppercase section label with an accent tick and optional trailing.
 class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,
@@ -23,7 +24,7 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+    final p = AppPalette.of(context);
     final resolvedPadding =
         padding ??
         (dense
@@ -33,14 +34,23 @@ class SectionHeader extends StatelessWidget {
       padding: resolvedPadding,
       child: Row(
         children: [
+          Container(
+            width: 2,
+            height: 10,
+            decoration: BoxDecoration(
+              color: p.accent,
+              borderRadius: BorderRadius.circular(1),
+            ),
+          ),
+          const SizedBox(width: 3),
           Expanded(
             child: Text(
               title.toUpperCase(),
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w500,
-                letterSpacing: 0.4,
-                color: color,
+                letterSpacing: 0.6,
+                color: p.textTertiary,
               ),
             ),
           ),
