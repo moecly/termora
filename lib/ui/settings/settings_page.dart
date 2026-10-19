@@ -13,7 +13,7 @@ import '../../design/widgets/section_header.dart';
 import '../../terminal/terminal_themes.dart';
 import '../common/backup_actions.dart';
 
-const String kAppVersion = '1.0.0+1';
+const String kAppVersion = '1.0.2+2';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});

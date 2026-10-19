@@ -1,6 +1,6 @@
 # Changelog
 
-## 未发布
+## 1.0.2
 
 - 设计系统：重做色彩层级（深色四级表面、浅色灰底+纯白表面）、排版分级、间距与圆角令牌；新增阴影（`AppShadows`）与统一动效令牌（`Motion`，含时长/曲线/弹簧），并新增按系统「减少动画」偏好自动降级的兜底（`AppMotion.reduced`）。
 - 动效体系：页面切换改用 shared-axis 横向过渡（终端页用 fade-through + 头像共享元素）；弹层/菜单/底部面板统一走 `showAppDialog`/`showAppSheet`/`showAppMenu`；新增错峰入场、按下反馈、悬停表面与列表增删位移（`AnimatedDiffList`）等动效原语。
